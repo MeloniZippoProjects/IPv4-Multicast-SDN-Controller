@@ -13,7 +13,11 @@ public class MulticastWebRoutable implements RestletRoutable {
      */
     public Restlet getRestlet(Context context) {
         Router router = new Router(context);
-        router.attach("/multicastgroups", MulticastGroupsResource.class);
+        router.attach("/create", MulticastCreateResource.class);
+        router.attach("/delete", MulticastDeleteResource.class);
+        router.attach("/join", MulticastJoinResource.class);
+        router.attach("/unjoin", MulticastJoinResource.class);
+        router.attach("/list", MulticastListResource.class);
         return router;
     }
 
@@ -21,6 +25,6 @@ public class MulticastWebRoutable implements RestletRoutable {
      * Set the base path for the Topology
      */
     public String basePath() {
-        return "";
+        return "/multicastgroups";
     }
 }
