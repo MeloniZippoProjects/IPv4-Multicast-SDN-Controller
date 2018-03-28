@@ -22,7 +22,6 @@ import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
 import org.projectfloodlight.openflow.types.*;
 
-import java.net.Inet4Address;
 import java.util.*;
 
 
@@ -49,7 +48,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     //todo: add all validation of ip addresses
 
-    public void addGroup(Inet4Address groupIP) throws GroupAlreadyExistsException
+    public void addGroup(IPv4Address groupIP) throws GroupAlreadyExistsException
     {
         MulticastGroup newGroup = new MulticastGroup(groupIP);
 
@@ -59,7 +58,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             throw new GroupAlreadyExistsException();
     }
 
-    public void deleteGroup(Inet4Address groupIP) throws GroupNotFoundException
+    public void deleteGroup(IPv4Address groupIP) throws GroupNotFoundException
     {
         Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == groupIP).findFirst();
         if(target.isPresent())
@@ -68,7 +67,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             throw new GroupNotFoundException();
     }
 
-    public void addToGroup(Inet4Address groupIP, Inet4Address hostIP) throws GroupNotFoundException
+    public void addToGroup(IPv4Address groupIP, IPv4Address hostIP) throws GroupNotFoundException
     {
         Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == groupIP).findFirst();
         if(target.isPresent())
@@ -77,7 +76,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             throw new GroupNotFoundException();
     }
 
-    public void removeFromGroup(Inet4Address groupIP, Inet4Address hostIP) throws GroupNotFoundException
+    public void removeFromGroup(IPv4Address groupIP, IPv4Address hostIP) throws GroupNotFoundException
     {
         Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == groupIP).findFirst();
         if(target.isPresent())

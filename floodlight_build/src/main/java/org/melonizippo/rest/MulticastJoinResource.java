@@ -1,6 +1,5 @@
 package org.melonizippo.rest;
 
-import java.net.Inet4Address;
 import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
@@ -11,6 +10,7 @@ import com.google.gson.JsonSyntaxException;
 import org.melonizippo.exceptions.GroupAlreadyExistsException;
 import org.melonizippo.exceptions.GroupNotFoundException;
 import org.melonizippo.openflow.IIPv4MulticastModule;
+import org.projectfloodlight.openflow.types.IPv4Address;
 import org.python.antlr.ast.Str;
 import org.restlet.Server;
 import org.restlet.resource.Delete;
@@ -42,8 +42,8 @@ public class MulticastJoinResource extends ServerResource {
         try
         {
             Map<String,String> request = (Map<String,String>)g.fromJson(fmJson, new HashMap<String,String>().getClass());
-            Inet4Address multicastAddress = (Inet4Address) Inet4Address.getByName(request.get("group"));
-            Inet4Address hostAddress = (Inet4Address) Inet4Address.getByName(request.get("host"));
+            IPv4Address multicastAddress = IPv4Address.of(request.get("group"));
+            IPv4Address hostAddress = IPv4Address.of(request.get("host"));
             multicastModule.addToGroup(multicastAddress, hostAddress);
         }
         catch(JsonSyntaxException ex)
@@ -51,7 +51,7 @@ public class MulticastJoinResource extends ServerResource {
             response.put("error", "syntax");
             response.put("message", "Incorrect json syntax");
         }
-        catch (UnknownHostException e)
+        catch (IllegalArgumentException e)
         {
             response.put("error", "syntax_address");
             response.put("message", "Cannot parse the IP address");

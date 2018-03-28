@@ -1,6 +1,5 @@
 package org.melonizippo.rest;
 
-import java.net.Inet4Address;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -13,6 +12,7 @@ import org.melonizippo.exceptions.GroupAlreadyExistsException;
 import org.melonizippo.exceptions.GroupNotFoundException;
 import org.melonizippo.openflow.IIPv4MulticastModule;
 import org.melonizippo.openflow.MulticastGroup;
+import org.projectfloodlight.openflow.types.IPv4Address;
 import org.python.antlr.ast.Str;
 import org.restlet.Server;
 import org.restlet.resource.Delete;
@@ -39,11 +39,11 @@ public class MulticastListResource extends ServerResource {
         for (MulticastGroup group: multicastGroups)
         {
             Set<String> hosts = new HashSet<>();
-            for(Inet4Address host : group.getPartecipants())
+            for(IPv4Address host : group.getPartecipants())
             {
-                hosts.add(host.getHostAddress());
+                hosts.add(host.toString());
             }
-            response.put(group.getIP().getHostAddress(), hosts);
+            response.put(group.getIP().toString(), hosts);
         }
 
         return g.toJson(response);
