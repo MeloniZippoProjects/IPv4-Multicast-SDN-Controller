@@ -1,20 +1,14 @@
 package org.melonizippo.rest;
 
-import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
-import org.melonizippo.exceptions.GroupAlreadyExistsException;
 import org.melonizippo.exceptions.GroupNotFoundException;
-import org.melonizippo.openflow.IIPv4MulticastModule;
+import org.melonizippo.openflow.IIPv4MulticastService;
 import org.projectfloodlight.openflow.types.IPv4Address;
-import org.python.antlr.ast.Str;
-import org.restlet.Server;
-import org.restlet.resource.Delete;
-import org.restlet.resource.Get;
 import org.restlet.resource.Post;
 import org.restlet.resource.ServerResource;
 import org.slf4j.Logger;
@@ -32,9 +26,9 @@ public class MulticastJoinResource extends ServerResource {
     @Post("join")
     public String Join(String fmJson)
     {
-        IIPv4MulticastModule multicastModule =
-                (IIPv4MulticastModule)getContext().getAttributes().
-                        get(IIPv4MulticastModule.class.getCanonicalName());
+        IIPv4MulticastService multicastModule =
+                (IIPv4MulticastService)getContext().getAttributes().
+                        get(IIPv4MulticastService.class.getCanonicalName());
 
         Map<String, String> response = new HashMap<String, String>();
         Gson g = new Gson();

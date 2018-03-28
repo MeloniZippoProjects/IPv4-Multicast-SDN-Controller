@@ -21,12 +21,12 @@ import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
 import org.projectfloodlight.openflow.types.*;
+import org.slf4j.*;
 
 import java.util.*;
 
-
-
-public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastModule {
+public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService {
+    private final static Logger logger = LoggerFactory.getLogger(IPv4MulticastModule.class);
 
     protected IFloodlightProviderService floodlightProvider;
     protected IRestApiService restApiService;
@@ -190,12 +190,18 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         return false;
     }
 
-    public Collection<Class<? extends IFloodlightService>> getModuleServices() {
-        return null;
+    public Collection<Class<? extends IFloodlightService>> getModuleServices()
+    {
+        List<Class<? extends IFloodlightService>> l = new ArrayList<>();
+        l.add(IIPv4MulticastService.class);
+        return l;
     }
 
-    public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls() {
-        return null;
+    public Map<Class<? extends IFloodlightService>, IFloodlightService> getServiceImpls()
+    {
+        Map<Class<? extends IFloodlightService>, IFloodlightService> m = new HashMap<>();
+        m.put(IIPv4MulticastService.class, this);
+        return m;
     }
 
     public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
@@ -207,6 +213,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     }
 
     public void init(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException {
+        logger.info("Init...");
+
         floodlightProvider = floodlightModuleContext.getServiceImpl(IFloodlightProviderService.class);
         restApiService = floodlightModuleContext.getServiceImpl(IRestApiService.class);
 
@@ -217,6 +225,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     }
 
     public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException {
+        logger.info("Startup...");
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
         restApiService.addRestletRoutable(new MulticastWebRoutable());
     }

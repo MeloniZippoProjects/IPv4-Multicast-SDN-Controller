@@ -18,6 +18,7 @@ public class MulticastWebRoutable implements RestletRoutable {
         router.attach("/join", MulticastJoinResource.class);
         router.attach("/unjoin", MulticastJoinResource.class);
         router.attach("/list", MulticastListResource.class);
+        router.attach("/test", MulticastTestResource.class);
         return router;
     }
 
