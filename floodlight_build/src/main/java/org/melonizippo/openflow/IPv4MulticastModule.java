@@ -61,7 +61,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public void deleteGroup(Inet4Address groupIP) throws GroupNotFoundException
     {
-        Optional<MulticastGroup> target = multicastGroups.stream().findFirst(group -> group.IP == groupIP);
+        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == groupIP).findFirst();
         if(target.isPresent())
             multicastGroups.remove(target.get());
         else
@@ -70,7 +70,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public void addToGroup(Inet4Address groupIP, Inet4Address hostIP) throws GroupNotFoundException
     {
-        Optional<MulticastGroup> target = multicastGroups.stream().findFirst(group -> group.IP == groupIP);
+        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == groupIP).findFirst();
         if(target.isPresent())
             target.get().Partecipants.add(hostIP);
         else
@@ -79,7 +79,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public void removeFromGroup(Inet4Address groupIP, Inet4Address hostIP) throws GroupNotFoundException
     {
-        Optional<MulticastGroup> target = multicastGroups.stream().findFirst(group -> group.IP == groupIP);
+        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == groupIP).findFirst();
         if(target.isPresent())
             target.get().Partecipants.remove(hostIP);
         else
