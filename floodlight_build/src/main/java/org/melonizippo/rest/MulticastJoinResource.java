@@ -1,5 +1,7 @@
 package org.melonizippo.rest;
 
+import java.net.Inet4Address;
+import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -40,12 +42,19 @@ public class MulticastJoinResource extends ServerResource {
         try
         {
             Map<String,String> request = (Map<String,String>)g.fromJson(fmJson, new HashMap<String,String>().getClass());
-            multicastModule.addToGroup(request.get("group"), request.get("host"));
+            Inet4Address multicastAddress = (Inet4Address) Inet4Address.getByName(request.get("group"));
+            Inet4Address hostAddress = (Inet4Address) Inet4Address.getByName(request.get("host"));
+            multicastModule.addToGroup(multicastAddress, hostAddress);
         }
         catch(JsonSyntaxException ex)
         {
             response.put("error", "syntax");
             response.put("message", "Incorrect json syntax");
+        }
+        catch (UnknownHostException e)
+        {
+            response.put("error", "syntax_address");
+            response.put("message", "Cannot parse the IP address");
         }
         catch(GroupNotFoundException ex)
         {
