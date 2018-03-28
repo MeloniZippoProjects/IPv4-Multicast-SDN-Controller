@@ -98,10 +98,11 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
             //todo: check if toString is correct output
             //if set contains the dest address, it is a valid multicast group
-            if(getGroupsSet().contains(destinationAddress.toString()))
+            Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == destinationAddress).findFirst();
+            if(target.isPresent())
             {
                 if(!OFGroupsIds.containsKey(destinationAddress.toString()))
-                    createNewOFGroup(iofSwitch, destinationAddress.toString());
+                    createNewOFGroup(iofSwitch, destinationAddress);
 
                 //get available action types
                 OFActions actions = iofSwitch.getOFFactory().actions();
@@ -134,8 +135,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         return Command.CONTINUE;
     }
 
-    private void createNewOFGroup(IOFSwitch iofSwitch, String multicastAddress) {
-        Set<String> hosts = multicastGroups.get(multicastAddress);
+    private void createNewOFGroup(IOFSwitch iofSwitch, IPv4Address multicastAddress) {
+        MulticastGroup multicastGroup = multicastGroups.stream().filter(group -> group.IP == multicastAddress).findFirst().get();
         int groupId;
         if(!OFGroupsIds.isEmpty())
              groupId = Collections.max(OFGroupsIds.values()) + 1;
@@ -154,13 +155,13 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         //Open Flow extendable matches, needed to create actions
         OFOxms oxms = iofSwitch.getOFFactory().oxms();
 
-        for(String host : hosts)
+        for(IPv4Address hostIP : multicastGroup.getPartecipants())
         {
             ArrayList<OFAction> actionList = new ArrayList<OFAction>();
             OFActionSetField forwardAction = actions.buildSetField()
                     .setField(
                             oxms.buildIpv4Dst()
-                                    .setValue(IPv4Address.of(host))
+                                    .setValue(hostIP)
                                     .build()
                     ).build();
             actionList.add(forwardAction);
@@ -211,7 +212,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
         //todo: maybe change it in a configuration file
         unicastPool = new SubnetUtils("192.168.0.0/24");
-        multicastPool = new SubnetUtils("192.168.1.0/28");
+        multicastPool = new SubnetUtils("192.168.1.0/28");  //todo: use the IPv4 multicast space
         multicastGroups = new HashSet<>(); //todo: review implementation. Need concurrency guarantees?
     }
 
