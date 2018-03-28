@@ -22,6 +22,7 @@ import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
 import org.projectfloodlight.openflow.types.*;
 
+import java.net.Inet4Address;
 import java.util.*;
 
 
@@ -34,48 +35,53 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     protected SubnetUtils unicastPool;
     protected SubnetUtils multicastPool;
 
-    protected Map<String, Set<String>> multicastGroups;
+    protected Set<MulticastGroup> multicastGroups;
     protected Map<String, Integer> OFGroupsIds;
 
     // Rule timeouts
     private static short IDLE_TIMEOUT = 10; // in seconds
     private static short HARD_TIMEOUT = 20; // every 20 seconds drop the entry
 
-    public Set<String> getGroupsSet() {
-        return multicastGroups.keySet();
+    public Set<MulticastGroup> getMulticastGroups()
+    {
+        return Collections.unmodifiableSet(multicastGroups);
     }
-
 
     //todo: add all validation of ip addresses
 
-    public void addGroup(String group) throws GroupAlreadyExistsException
+    public void addGroup(Inet4Address groupIP) throws GroupAlreadyExistsException
     {
-        if(!multicastGroups.containsKey(group))
-            multicastGroups.put(group, new HashSet<String>());
+        MulticastGroup newGroup = new MulticastGroup(groupIP);
+
+        if(!multicastGroups.contains(newGroup))
+            multicastGroups.add(newGroup);
         else
             throw new GroupAlreadyExistsException();
     }
 
-    public void deleteGroup(String group) throws GroupNotFoundException {
-        if(multicastGroups.containsKey(group))
-            multicastGroups.remove(group);
+    public void deleteGroup(Inet4Address groupIP) throws GroupNotFoundException
+    {
+        Optional<MulticastGroup> target = multicastGroups.stream().findFirst(group -> group.IP == groupIP);
+        if(target.isPresent())
+            multicastGroups.remove(target.get());
         else
             throw new GroupNotFoundException();
     }
 
-    public void addToGroup(String group, String host) throws GroupNotFoundException
+    public void addToGroup(Inet4Address groupIP, Inet4Address hostIP) throws GroupNotFoundException
     {
-        if(multicastGroups.containsKey(group)) {
-            multicastGroups.get(group).add(host);
-        }
+        Optional<MulticastGroup> target = multicastGroups.stream().findFirst(group -> group.IP == groupIP);
+        if(target.isPresent())
+            target.get().Partecipants.add(hostIP);
         else
             throw new GroupNotFoundException();
     }
 
-    public void removeFromGroup(String group, String host) throws GroupNotFoundException
+    public void removeFromGroup(Inet4Address groupIP, Inet4Address hostIP) throws GroupNotFoundException
     {
-        if(multicastGroups.containsKey(group))
-            multicastGroups.get(group).add(host);
+        Optional<MulticastGroup> target = multicastGroups.stream().findFirst(group -> group.IP == groupIP);
+        if(target.isPresent())
+            target.get().Partecipants.remove(hostIP);
         else
             throw new GroupNotFoundException();
     }
@@ -207,7 +213,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         //todo: maybe change it in a configuration file
         unicastPool = new SubnetUtils("192.168.0.0/24");
         multicastPool = new SubnetUtils("192.168.1.0/28");
-        multicastGroups = new HashMap<String, Set<String>>();
+        multicastGroups = new HashSet<>(); //todo: review implementation. Need concurrency guarantees?
     }
 
     public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException {
