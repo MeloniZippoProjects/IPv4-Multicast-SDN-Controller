@@ -135,7 +135,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         return Command.CONTINUE;
     }
 
-    private void createNewOFGroup(IOFSwitch iofSwitch, IPv4Address multicastAddress) {
+    private void createNewOFGroup(IOFSwitch iofSwitch, IPv4Address multicastAddress) 
+    {
         MulticastGroup multicastGroup = multicastGroups.stream().filter(group -> group.IP == multicastAddress).findFirst().get();
         int groupId;
         if(!OFGroupsIds.isEmpty())
@@ -178,15 +179,18 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         iofSwitch.write(multicastActionGroup);
     }
 
-    public String getName() {
+    public String getName() 
+    {
         return "IPv4MulticastModule";
     }
 
-    public boolean isCallbackOrderingPrereq(OFType ofType, String s) {
+    public boolean isCallbackOrderingPrereq(OFType ofType, String s) 
+    {
         return false;
     }
 
-    public boolean isCallbackOrderingPostreq(OFType ofType, String s) {
+    public boolean isCallbackOrderingPostreq(OFType ofType, String s) 
+    {
         return false;
     }
 
@@ -204,7 +208,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         return m;
     }
 
-    public Collection<Class<? extends IFloodlightService>> getModuleDependencies() {
+    public Collection<Class<? extends IFloodlightService>> getModuleDependencies() 
+    {
         Collection<Class<? extends IFloodlightService>> l =
                 new ArrayList<Class<? extends IFloodlightService>>();
         l.add(IFloodlightProviderService.class);
@@ -212,7 +217,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         return l;
     }
 
-    public void init(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException {
+    public void init(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException 
+    {
         logger.info("Init...");
 
         floodlightProvider = floodlightModuleContext.getServiceImpl(IFloodlightProviderService.class);
@@ -220,11 +226,12 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
         //todo: maybe change it in a configuration file
         unicastPool = new SubnetUtils("192.168.0.0/24");
-        multicastPool = new SubnetUtils("192.168.1.0/28");  //todo: use the IPv4 multicast space
+        multicastPool = new SubnetUtils("224.0.100.0/24");
         multicastGroups = new HashSet<>(); //todo: review implementation. Need concurrency guarantees?
     }
 
-    public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException {
+    public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException 
+    {
         logger.info("Startup...");
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
         restApiService.addRestletRoutable(new MulticastWebRoutable());
