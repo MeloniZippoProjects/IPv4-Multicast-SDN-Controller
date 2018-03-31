@@ -6,8 +6,11 @@ import java.util.Map;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
-import org.melonizippo.exceptions.GroupNotFoundException;
+import org.melonizippo.exceptions.GroupAlreadyExistsException;
+import org.melonizippo.exceptions.GroupAddressOutOfPoolException;
+import org.melonizippo.exceptions.HostAddressOutOfPoolException;
 import org.melonizippo.openflow.IIPv4MulticastService;
+
 import org.projectfloodlight.openflow.types.IPv4Address;
 import org.restlet.resource.Post;
 import org.restlet.resource.ServerResource;
@@ -49,6 +52,11 @@ public class MulticastJoinResource extends ServerResource {
         {
             response.put("error", "syntax_address");
             response.put("message", "Cannot parse the IP address");
+        }
+        catch(GroupAddressOutOfPoolException ex)
+        {
+            response.put("error", "group_address_invalid");
+            response.put("message", "Group address is out of the configured pool");
         }
         catch(GroupNotFoundException ex)
         {
