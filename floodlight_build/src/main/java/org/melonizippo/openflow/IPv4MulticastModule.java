@@ -31,8 +31,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     protected IFloodlightProviderService floodlightProvider;
     protected IRestApiService restApiService;
 
-    protected SubnetUtils unicastPool;
-    protected SubnetUtils multicastPool;
+    protected IPv4AddressWithMask unicastPool;
+    protected IPv4AddressWithMask multicastPool;
 
     protected Set<MulticastGroup> multicastGroups;
     protected Map<String, Integer> OFGroupsIds;
@@ -50,6 +50,9 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public void addGroup(IPv4Address groupIP) throws GroupAlreadyExistsException
     {
+        if(!multicastPool.contains(groupIP))
+            throw new GroupAddressOutOfPoolException();
+
         MulticastGroup newGroup = new MulticastGroup(groupIP);
 
         if(!multicastGroups.contains(newGroup))
@@ -60,6 +63,9 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public void deleteGroup(IPv4Address groupIP) throws GroupNotFoundException
     {
+        if(!multicastPool.contains(groupIP))
+            throw new GroupAddressOutOfPoolException();
+
         Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == groupIP).findFirst();
         if(target.isPresent())
             multicastGroups.remove(target.get());
@@ -69,6 +75,12 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public void addToGroup(IPv4Address groupIP, IPv4Address hostIP) throws GroupNotFoundException
     {
+        if(!multicastPool.contains(groupIP))
+            throw new GroupAddressOutOfPoolException();
+
+        if(!unicastPool.contains(hostIP))
+            throw new HostAddressOutOfPoolException();           
+
         Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == groupIP).findFirst();
         if(target.isPresent())
             target.get().Partecipants.add(hostIP);
@@ -78,6 +90,12 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public void removeFromGroup(IPv4Address groupIP, IPv4Address hostIP) throws GroupNotFoundException
     {
+        if(!multicastPool.contains(groupIP))
+            throw new GroupAddressOutOfPoolException();
+
+        if(!unicastPool.contains(hostIP))
+            throw new HostAddressOutOfPoolException();  
+        
         Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == groupIP).findFirst();
         if(target.isPresent())
             target.get().Partecipants.remove(hostIP);
@@ -225,8 +243,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         restApiService = floodlightModuleContext.getServiceImpl(IRestApiService.class);
 
         //todo: maybe change it in a configuration file
-        unicastPool = new SubnetUtils("192.168.0.0/24");
-        multicastPool = new SubnetUtils("224.0.100.0/24");
+        unicastPool = IPv4AddressWithMask.of("192.168.0.0/24");
+        multicastPool = IPv4AddressWithMask.of("224.0.100.0/24");
         multicastGroups = new HashSet<>(); //todo: review implementation. Need concurrency guarantees?
     }
 
