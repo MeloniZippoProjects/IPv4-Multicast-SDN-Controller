@@ -114,11 +114,13 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             IPv4 payload = (IPv4) eth.getPayload();
             IPv4Address destinationAddress = payload.getDestinationAddress();
 
-            //todo: check if toString is correct output
+            //todo: should check if the destinationAddress is a multicast address in IPv4 sense?
+
             //if set contains the dest address, it is a valid multicast group
             Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.IP == destinationAddress).findFirst();
             if(target.isPresent())
             {
+                //todo: check if toString is correct output
                 if(!OFGroupsIds.containsKey(destinationAddress.toString()))
                     createNewOFGroup(iofSwitch, destinationAddress);
 
