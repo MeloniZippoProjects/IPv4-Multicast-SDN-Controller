@@ -15,10 +15,10 @@ import org.restlet.resource.ServerResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MulticastListResource extends ServerResource {
+public class MulticastGroupSetResource extends ServerResource {
     protected static Logger log = LoggerFactory.getLogger(MulticastListResource.class);
 
-    @Get("list")
+    @Get("json")
     public String List()
     {
         IIPv4MulticastService multicastModule =
