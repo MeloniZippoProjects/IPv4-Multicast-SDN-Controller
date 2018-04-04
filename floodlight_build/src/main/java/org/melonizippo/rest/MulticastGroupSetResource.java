@@ -86,6 +86,7 @@ public class MulticastGroupSetResource extends ServerResource {
             Map<String, Object> groupMap = new HashMap<String, Object>();
             groupMap.put("id", group.getId());
             groupMap.put("name", group.getName());
+            groupMap.put("ip", group.getIp().toString());
             Set<String> hosts = new HashSet<>();
             for(IPv4Address host : group.getPartecipants())
             {
