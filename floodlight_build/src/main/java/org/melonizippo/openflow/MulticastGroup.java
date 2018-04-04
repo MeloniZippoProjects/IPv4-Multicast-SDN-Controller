@@ -7,12 +7,12 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MulticastGroup {
-    public static AtomicInteger IDFactory;
+    public static AtomicInteger IDFactory = new AtomicInteger(0);
 
-    Integer id;
-    String name;
-    IPv4Address ip;
-    Set<IPv4Address> partecipants;
+    private int id;
+    private String name;
+    private IPv4Address ip;
+    private Set<IPv4Address> partecipants;
 
     public MulticastGroup(IPv4Address ip, String name, int id)
     {
@@ -32,7 +32,7 @@ public class MulticastGroup {
         return partecipants;
     }
 
-    public Integer getId()
+    public int getId()
     {
         return id;
     }
