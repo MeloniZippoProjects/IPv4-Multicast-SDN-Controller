@@ -9,10 +9,7 @@ import net.floodlightcontroller.packet.Ethernet;
 import net.floodlightcontroller.packet.IPv4;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.util.FlowModUtils;
-import org.melonizippo.exceptions.GroupAddressOutOfPoolException;
-import org.melonizippo.exceptions.GroupAlreadyExistsException;
-import org.melonizippo.exceptions.GroupNotFoundException;
-import org.melonizippo.exceptions.HostAddressOutOfPoolException;
+import org.melonizippo.exceptions.*;
 import org.melonizippo.rest.MulticastWebRoutable;
 import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
@@ -47,58 +44,53 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         return Collections.unmodifiableSet(multicastGroups);
     }
 
-    //todo: add all validation of ip addresses
-
-    public void addGroup(IPv4Address groupIP) throws GroupAlreadyExistsException, GroupAddressOutOfPoolException
+    public Integer addGroup(IPv4Address groupIP, String groupName) throws GroupAlreadyExistsException, GroupAddressOutOfPoolException
     {
         if(!multicastPool.contains(groupIP))
             throw new GroupAddressOutOfPoolException();
 
-        MulticastGroup newGroup = new MulticastGroup(groupIP);
-
-        if(!multicastGroups.contains(newGroup))
+        Optional duplicate = multicastGroups.stream().filter( group -> group.getIp() == groupIP ).findFirst();
+        if(duplicate.isPresent())
+        {
+            Integer groupID = MulticastGroup.IDFactory.incrementAndGet();
+            MulticastGroup newGroup = new MulticastGroup(groupIP, groupName, groupID);
             multicastGroups.add(newGroup);
+            return groupID;
+        }
         else
             throw new GroupAlreadyExistsException();
     }
 
-    public void deleteGroup(IPv4Address groupIP) throws GroupNotFoundException, GroupAddressOutOfPoolException
+    public void deleteGroup(Integer groupID) throws GroupNotFoundException
     {
-
-        if(!multicastPool.contains(groupIP))
-            throw new GroupAddressOutOfPoolException();
-        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.ip == groupIP).findFirst();
+        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getId() == groupID).findFirst();
         if(target.isPresent())
             multicastGroups.remove(target.get());
         else
             throw new GroupNotFoundException();
     }
 
-    public void addToGroup(IPv4Address groupIP, IPv4Address hostIP) throws GroupNotFoundException, GroupAddressOutOfPoolException, HostAddressOutOfPoolException
+    public void addToGroup(Integer groupID, IPv4Address hostIP) throws GroupNotFoundException, HostAddressOutOfPoolException
     {
-        if(!multicastPool.contains(groupIP))
-            throw new GroupAddressOutOfPoolException();
         if(!unicastPool.contains(hostIP))
             throw new HostAddressOutOfPoolException();
 
-        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.ip == groupIP).findFirst();
+        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getId() == groupID).findFirst();
         if(target.isPresent())
-            target.get().partecipants.add(hostIP);
+            target.get().getPartecipants().add(hostIP);
         else
             throw new GroupNotFoundException();
     }
 
-    public void removeFromGroup(IPv4Address groupIP, IPv4Address hostIP) throws GroupNotFoundException, GroupAddressOutOfPoolException, HostAddressOutOfPoolException
+    public void removeFromGroup(Integer groupID, IPv4Address hostIP) throws GroupNotFoundException, HostAddressOutOfPoolException, HostNotFoundException
     {
-        if(!multicastPool.contains(groupIP))
-            throw new GroupAddressOutOfPoolException();
-
         if(!unicastPool.contains(hostIP))
             throw new HostAddressOutOfPoolException();
 
-        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.ip == groupIP).findFirst();
+        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getId() == groupID).findFirst();
         if(target.isPresent())
-            target.get().partecipants.remove(hostIP);
+            if(!target.get().getPartecipants().remove(hostIP))
+                throw new HostNotFoundException();
         else
             throw new GroupNotFoundException();
     }
@@ -117,7 +109,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             //todo: should check if the destinationAddress is a multicast address in IPv4 sense?
 
             //if set contains the dest address, it is a valid multicast group
-            Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.ip == destinationAddress).findFirst();
+            Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getIp() == destinationAddress).findFirst();
             if(target.isPresent())
             {
                 //todo: check if toString is correct output
@@ -157,7 +149,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     private void createNewOFGroup(IOFSwitch iofSwitch, IPv4Address multicastAddress) 
     {
-        MulticastGroup multicastGroup = multicastGroups.stream().filter(group -> group.ip == multicastAddress).findFirst().get();
+        MulticastGroup multicastGroup = multicastGroups.stream().filter(group -> group.getIp() == multicastAddress).findFirst().get();
         int groupId;
         if(!OFGroupsIds.isEmpty())
              groupId = Collections.max(OFGroupsIds.values()) + 1;
