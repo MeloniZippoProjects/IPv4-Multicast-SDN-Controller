@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
 public class MulticastGroupResource extends ServerResource {
     protected static Logger log = LoggerFactory.getLogger(MulticastGroupResource.class);
 
-
+    
     /**
      *
      * Takes groupID from URL

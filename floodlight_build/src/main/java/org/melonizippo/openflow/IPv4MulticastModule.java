@@ -49,8 +49,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         if(!multicastPool.contains(groupIP))
             throw new GroupAddressOutOfPoolException();
 
-        Optional duplicate = multicastGroups.stream().filter( group -> group.getIp() == groupIP ).findFirst();
-        if(duplicate.isPresent())
+        Optional duplicate = multicastGroups.stream().filter( group -> group.getIp().equals(groupIP)).findFirst();
+        if(!duplicate.isPresent())
         {
             Integer groupID = MulticastGroup.IDFactory.incrementAndGet();
             MulticastGroup newGroup = new MulticastGroup(groupIP, groupName, groupID);
@@ -88,9 +88,11 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             throw new HostAddressOutOfPoolException();
 
         Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getId() == groupID).findFirst();
-        if(target.isPresent())
-            if(!target.get().getPartecipants().remove(hostIP))
+        if(target.isPresent()) {
+            if (!target.get().getPartecipants().remove(hostIP)) {
                 throw new HostNotFoundException();
+            }
+        }
         else
             throw new GroupNotFoundException();
     }
