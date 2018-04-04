@@ -8,17 +8,20 @@ import com.google.gson.JsonSyntaxException;
 
 import org.melonizippo.exceptions.GroupAlreadyExistsException;
 import org.melonizippo.exceptions.GroupAddressOutOfPoolException;
+import org.melonizippo.exceptions.GroupNotFoundException;
 import org.melonizippo.exceptions.HostAddressOutOfPoolException;
 import org.melonizippo.openflow.IIPv4MulticastService;
 
 import org.projectfloodlight.openflow.types.IPv4Address;
+import org.restlet.resource.Delete;
 import org.restlet.resource.Post;
+import org.restlet.resource.Put;
 import org.restlet.resource.ServerResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MulticastJoinResource extends ServerResource {
-    protected static Logger log = LoggerFactory.getLogger(MulticastJoinResource.class);
+public class MulticastGroupHostsResource extends ServerResource {
+    protected static Logger log = LoggerFactory.getLogger(MulticastGroupHostsResource.class);
 
 
     /**
@@ -63,6 +66,11 @@ public class MulticastJoinResource extends ServerResource {
         {
             response.put("error", "group_not_found");
             response.put("message", "A multicast group with this address cannot be found");
+        }
+        catch(HostAddressOutOfPoolException ex)
+        {
+            response.put("error", "host_address_invalid");
+            response.put("message", "Host address is out of the configured pool");
         }
 
         return g.toJson(response);
