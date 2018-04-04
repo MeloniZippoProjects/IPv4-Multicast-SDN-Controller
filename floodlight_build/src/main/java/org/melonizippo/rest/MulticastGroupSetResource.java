@@ -87,7 +87,7 @@ public class MulticastGroupSetResource extends ServerResource {
             {
                 hosts.add(host.toString());
             }
-            response.put(group.getIP().toString(), hosts);
+            response.put(group.getIp().toString(), hosts);
         }
 
         return g.toJson(response);

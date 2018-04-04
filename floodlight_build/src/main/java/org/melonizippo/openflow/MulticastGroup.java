@@ -4,25 +4,42 @@ import org.projectfloodlight.openflow.types.IPv4Address;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MulticastGroup {
-    IPv4Address IP;
-    Set<IPv4Address> Partecipants;
+    public static AtomicInteger IDFactory;
 
-    public MulticastGroup(IPv4Address ip)
+    Integer id;
+    String name;
+    IPv4Address ip;
+    Set<IPv4Address> partecipants;
+
+    public MulticastGroup(IPv4Address ip, String name, int id)
     {
-        IP = ip;
-        Partecipants = new HashSet<>();
+        this.id = id;
+        this.name = name;
+        this.ip = ip;
+        partecipants = new HashSet<>();
     }
 
-    public IPv4Address getIP()
+    public IPv4Address getIp()
     {
-        return IP;
+        return ip;
     }
 
     public Set<IPv4Address> getPartecipants()
     {
-        return Partecipants;
+        return partecipants;
+    }
+
+    public Integer getId()
+    {
+        return id;
+    }
+
+    public String getName()
+    {
+        return name;
     }
 
     @Override
@@ -33,6 +50,6 @@ public class MulticastGroup {
         if(!(other instanceof MulticastGroup)) return false;
 
         MulticastGroup otherGroup = (MulticastGroup) other;
-        return otherGroup.IP == this.IP;
+        return otherGroup.ip == this.ip;
     }
 }
