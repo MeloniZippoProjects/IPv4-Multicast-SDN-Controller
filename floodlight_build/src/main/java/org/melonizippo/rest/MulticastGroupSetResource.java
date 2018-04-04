@@ -1,9 +1,6 @@
 package org.melonizippo.rest;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import com.google.gson.Gson;
 
@@ -24,8 +21,8 @@ public class MulticastGroupSetResource extends ServerResource {
 
     /**
      *
-     * @param fmJson a json object in the format { "group": string(IPv4 address) }
-     * @return a json response
+     * @param fmJson a json object in the format { "ip": string(IPv4 address), "name" : string }
+     * @return a json response in the format { "error" : string , "message" : string, "content" : integer}
      */
     @Put("json")
     public String Create(String fmJson)
@@ -40,10 +37,12 @@ public class MulticastGroupSetResource extends ServerResource {
         try {
             Map<String,Object> map = new HashMap<String,Object>();
             Map<String,String> request = (Map<String,String>)g.fromJson(fmJson, new HashMap<String,String>().getClass());
-            IPv4Address multicastAddress = IPv4Address.of(request.get("group"));
-            multicastModule.addGroup(multicastAddress);
+            IPv4Address multicastAddress = IPv4Address.of(request.get("ip"));
+            String groupName = request.get("name");
+            Integer groupID = multicastModule.addGroup(multicastAddress, groupName);
             response.put("error","none");
             response.put("message","Group correctly created");
+            response.put("content", groupID.toString());
         }
         catch(JsonSyntaxException ex)
         {
@@ -76,18 +75,25 @@ public class MulticastGroupSetResource extends ServerResource {
                 (IIPv4MulticastService)getContext().getAttributes().
                         get(IIPv4MulticastService.class.getCanonicalName());
 
-        Map<String, Set<String>> response = new HashMap<String, Set<String>>();
+        List<Object> response = new LinkedList<Object>();
+
         Gson g = new Gson();
 
         Set<MulticastGroup> multicastGroups = multicastModule.getMulticastGroups();
         for (MulticastGroup group: multicastGroups)
         {
+
+            Map<String, Object> groupMap = new HashMap<String, Object>();
+            groupMap.put("id", group.getId());
+            groupMap.put("name", group.getName());
             Set<String> hosts = new HashSet<>();
             for(IPv4Address host : group.getPartecipants())
             {
                 hosts.add(host.toString());
             }
-            response.put(group.getIp().toString(), hosts);
+            groupMap.put("hosts", hosts);
+
+            response.add(groupMap);
         }
 
         return g.toJson(response);

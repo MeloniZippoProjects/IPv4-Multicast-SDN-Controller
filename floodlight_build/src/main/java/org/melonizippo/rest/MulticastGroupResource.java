@@ -23,11 +23,11 @@ public class MulticastGroupResource extends ServerResource {
 
     /**
      *
-     * @param fmJson a json object in the format { "group": string(IPv4 address) }
+     * Takes groupID from URL
      * @return a json response
      */
     @Delete("json")
-    public String Delete(String fmJson)
+    public String Delete()
     {
         IIPv4MulticastService multicastModule =
                 (IIPv4MulticastService)getContext().getAttributes().
@@ -40,9 +40,10 @@ public class MulticastGroupResource extends ServerResource {
         //todo: get params from url instead of json
         try
         {
-            Map<String,String> request = (Map<String,String>)g.fromJson(fmJson, new HashMap<String,String>().getClass());
-            IPv4Address multicastAddress = IPv4Address.of(request.get("group"));
-            multicastModule.deleteGroup(multicastAddress);
+            int groupId = Integer.parseInt((String)getRequestAttributes().get("groupId"));
+            multicastModule.deleteGroup(groupId);
+            response.put("error", "none");
+            response.put("message", "Group deleted");
         }
         catch(JsonSyntaxException ex)
         {
@@ -54,15 +55,10 @@ public class MulticastGroupResource extends ServerResource {
             response.put("error", "syntax_address");
             response.put("message", "Cannot parse the IP address");
         }
-        catch(GroupAddressOutOfPoolException ex)
-        {
-            response.put("error", "group_address_invalid");
-            response.put("message", "Group address is out of the configured pool");
-        }
         catch(GroupNotFoundException ex)
         {
             response.put("error", "group_not_found");
-            response.put("message", "A multicast group with this address cannot be found");
+            response.put("message", "A multicast group with this id cannot be found");
         }
 
         return g.toJson(response);
