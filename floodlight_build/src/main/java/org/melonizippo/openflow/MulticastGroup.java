@@ -13,9 +13,11 @@ public class MulticastGroup {
     public static AtomicInteger IDFactory = new AtomicInteger(0);
 
     private int id;
-    private String name;
     private IPv4Address ip;
     private Set<IPv4Address> partecipants;
+
+    private String name;
+    private String description;
 
     public MulticastGroup(IPv4Address ip, String name, int id)
     {
@@ -45,12 +47,23 @@ public class MulticastGroup {
         return name;
     }
 
+    public String getDescription()
+    {
+        return description;
+    }
+
+    public void setDescription(String description)
+    {
+        this.description = description;
+    }
+
     public Map<String, Object> getInfo()
     {
         Map<String, Object> groupMap = new HashMap<String, Object>();
-        groupMap.put("id", getId());
         groupMap.put("name", getName());
+        groupMap.put("description", getDescription());
         groupMap.put("ip", getIp().toString());
+        groupMap.put("id", getId());
         Set<String> hosts = new HashSet<>();
         for(IPv4Address host : getPartecipants())
         {
