@@ -22,6 +22,7 @@ import org.projectfloodlight.openflow.types.*;
 import org.slf4j.*;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentSkipListSet;
 
 public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService {
     private final static Logger logger = LoggerFactory.getLogger(IPv4MulticastModule.class);
@@ -241,7 +242,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         //todo: maybe change it in a configuration file
         unicastPool = IPv4AddressWithMask.of("192.168.0.0/24");
         multicastPool = IPv4AddressWithMask.of("224.0.100.0/24");
-        multicastGroups = new HashSet<>(); //todo: review implementation. Need concurrency guarantees?
+        multicastGroups = new ConcurrentSkipListSet<>();
     }
 
     public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException 

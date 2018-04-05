@@ -4,6 +4,7 @@ import org.projectfloodlight.openflow.types.IPv4Address;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MulticastGroup {
@@ -19,7 +20,7 @@ public class MulticastGroup {
         this.id = id;
         this.name = name;
         this.ip = ip;
-        partecipants = new HashSet<>();
+        partecipants = new ConcurrentSkipListSet<>();
     }
 
     public IPv4Address getIp()
