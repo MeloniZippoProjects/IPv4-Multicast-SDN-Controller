@@ -22,6 +22,7 @@ import org.projectfloodlight.openflow.types.*;
 import org.slf4j.*;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 
 public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService {
@@ -60,6 +61,16 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         }
         else
             throw new GroupAlreadyExistsException();
+    }
+
+    public MulticastGroup getGroup(Integer groupID) throws GroupNotFoundException
+    {
+        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getId() == groupID).findFirst();
+        if(target.isPresent())
+            return target.get();
+        else
+            throw new GroupNotFoundException();
+
     }
 
     public void deleteGroup(Integer groupID) throws GroupNotFoundException
@@ -240,9 +251,9 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         restApiService = floodlightModuleContext.getServiceImpl(IRestApiService.class);
 
         //todo: maybe change it in a configuration file
-        unicastPool = IPv4AddressWithMask.of("192.168.0.0/24");
+        unicastPool = IPv4AddressWithMask.of("192.168.20.0/24");
         multicastPool = IPv4AddressWithMask.of("224.0.100.0/24");
-        multicastGroups = new ConcurrentSkipListSet<>();
+        multicastGroups = ConcurrentHashMap.newKeySet();
     }
 
     public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException 
