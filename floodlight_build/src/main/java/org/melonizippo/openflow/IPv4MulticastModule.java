@@ -23,6 +23,7 @@ import org.slf4j.*;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService {
     private final static Logger logger = LoggerFactory.getLogger(IPv4MulticastModule.class);
@@ -243,6 +244,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         unicastPool = IPv4AddressWithMask.of("192.168.0.0/24");
         multicastPool = IPv4AddressWithMask.of("224.0.100.0/24");
         multicastGroups = new ConcurrentSkipListSet<>();
+        OFGroupsIds = new ConcurrentHashMap<>();
     }
 
     public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException 
