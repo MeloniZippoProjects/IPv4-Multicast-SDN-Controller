@@ -36,10 +36,10 @@ public class MulticastGroupHostsResource extends ServerResource {
         Map<String, String> response = new HashMap<String, String>();
         Gson g = new Gson();
 
-        //todo: get group id from url
         try
         {
             Map<String,String> request = (Map<String,String>)g.fromJson(fmJson, new HashMap<String,String>().getClass());
+            //todo: add syntax check for required fields
             int groupId = Integer.parseInt((String)getRequestAttributes().get("groupId"));
             IPv4Address hostAddress = IPv4Address.of(request.get("host"));
             multicastModule.addToGroup(groupId, hostAddress);
