@@ -2,7 +2,9 @@ package org.melonizippo.openflow;
 
 import org.projectfloodlight.openflow.types.IPv4Address;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,6 +43,22 @@ public class MulticastGroup {
     public String getName()
     {
         return name;
+    }
+
+    public Map<String, Object> getInfo()
+    {
+        Map<String, Object> groupMap = new HashMap<String, Object>();
+        groupMap.put("id", getId());
+        groupMap.put("name", getName());
+        groupMap.put("ip", getIp().toString());
+        Set<String> hosts = new HashSet<>();
+        for(IPv4Address host : getPartecipants())
+        {
+            hosts.add(host.toString());
+        }
+        groupMap.put("hosts", hosts);
+
+        return groupMap;
     }
 
     @Override
