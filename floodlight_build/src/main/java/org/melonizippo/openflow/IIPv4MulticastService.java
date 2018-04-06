@@ -10,6 +10,7 @@ public interface IIPv4MulticastService extends IFloodlightService
 {
     Set<MulticastGroup> getMulticastGroups();
     Integer addGroup(IPv4Address groupIP, String groupName) throws GroupAlreadyExistsException, GroupAddressOutOfPoolException;
+    MulticastGroup getGroup(Integer groupID) throws GroupNotFoundException;
     void deleteGroup(Integer groupID) throws GroupNotFoundException;
     void addToGroup(Integer groupID, IPv4Address hostIP) throws GroupNotFoundException, HostAddressOutOfPoolException;
     void removeFromGroup(Integer groupID, IPv4Address hostIP) throws GroupNotFoundException, HostAddressOutOfPoolException, HostNotFoundException;
