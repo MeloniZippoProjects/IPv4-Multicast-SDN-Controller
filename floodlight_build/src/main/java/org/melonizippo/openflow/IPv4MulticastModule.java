@@ -22,6 +22,7 @@ import org.projectfloodlight.openflow.types.*;
 import org.slf4j.*;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 
 public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService {
@@ -62,13 +63,20 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             throw new GroupAlreadyExistsException();
     }
 
-    public void deleteGroup(Integer groupID) throws GroupNotFoundException
+    public MulticastGroup getGroup(Integer groupID) throws GroupNotFoundException
     {
         Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getId() == groupID).findFirst();
         if(target.isPresent())
-            multicastGroups.remove(target.get());
+            return target.get();
         else
             throw new GroupNotFoundException();
+
+    }
+
+    public void deleteGroup(Integer groupID) throws GroupNotFoundException
+    {
+        MulticastGroup group = getGroup(groupID);
+        multicastGroups.remove(group);
     }
 
     public void addToGroup(Integer groupID, IPv4Address hostIP) throws GroupNotFoundException, HostAddressOutOfPoolException
@@ -76,11 +84,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         if(!unicastPool.contains(hostIP))
             throw new HostAddressOutOfPoolException();
 
-        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getId() == groupID).findFirst();
-        if(target.isPresent())
-            target.get().getPartecipants().add(hostIP);
-        else
-            throw new GroupNotFoundException();
+        MulticastGroup group = getGroup(groupID);
+        group.getPartecipants().add(hostIP);
     }
 
     public void removeFromGroup(Integer groupID, IPv4Address hostIP) throws GroupNotFoundException, HostAddressOutOfPoolException, HostNotFoundException
@@ -88,14 +93,9 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         if(!unicastPool.contains(hostIP))
             throw new HostAddressOutOfPoolException();
 
-        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getId() == groupID).findFirst();
-        if(target.isPresent()) {
-            if (!target.get().getPartecipants().remove(hostIP)) {
-                throw new HostNotFoundException();
-            }
-        }
-        else
-            throw new GroupNotFoundException();
+        MulticastGroup group = getGroup(groupID);
+        if (!group.getPartecipants().remove(hostIP))
+            throw new HostNotFoundException();
     }
 
     public Command receive(IOFSwitch iofSwitch, OFMessage ofMessage, FloodlightContext floodlightContext) {
@@ -240,9 +240,9 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         restApiService = floodlightModuleContext.getServiceImpl(IRestApiService.class);
 
         //todo: maybe change it in a configuration file
-        unicastPool = IPv4AddressWithMask.of("192.168.0.0/24");
+        unicastPool = IPv4AddressWithMask.of("192.168.20.0/24");
         multicastPool = IPv4AddressWithMask.of("224.0.100.0/24");
-        multicastGroups = new ConcurrentSkipListSet<>();
+        multicastGroups = ConcurrentHashMap.newKeySet();
     }
 
     public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException 

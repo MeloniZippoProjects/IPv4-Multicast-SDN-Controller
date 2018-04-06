@@ -36,10 +36,13 @@ public class MulticastGroupHostsResource extends ServerResource {
         Map<String, String> response = new HashMap<String, String>();
         Gson g = new Gson();
 
-        //todo: get group id from url
         try
         {
             Map<String,String> request = (Map<String,String>)g.fromJson(fmJson, new HashMap<String,String>().getClass());
+
+            if(!request.containsKey("host"))
+                throw new RequiredParameterException();
+
             int groupId = Integer.parseInt((String)getRequestAttributes().get("groupId"));
             IPv4Address hostAddress = IPv4Address.of(request.get("host"));
             multicastModule.addToGroup(groupId, hostAddress);
@@ -51,6 +54,11 @@ public class MulticastGroupHostsResource extends ServerResource {
         {
             response.put("error", "syntax");
             response.put("message", "Incorrect json syntax");
+        }
+        catch(RequiredParameterException ex)
+        {
+            response.put("error", "syntax_parameters");
+            response.put("message", "Missing required parameter(s)");
         }
         catch (IllegalArgumentException e)
         {
@@ -81,11 +89,13 @@ public class MulticastGroupHostsResource extends ServerResource {
         Map<String, String> response = new HashMap<String, String>();
         Gson g = new Gson();
 
-
-        //todo get group id from url
         try
         {
             Map<String,String> request = (Map<String,String>)g.fromJson(fmJson, new HashMap<String,String>().getClass());
+
+            if(!request.containsKey("host"))
+                throw new RequiredParameterException();
+
             int groupId = Integer.parseInt((String)getRequestAttributes().get("groupId"));
             IPv4Address hostAddress = IPv4Address.of(request.get("host"));
             multicastModule.removeFromGroup(groupId, hostAddress);
@@ -97,6 +107,11 @@ public class MulticastGroupHostsResource extends ServerResource {
         {
             response.put("error", "syntax");
             response.put("message", "Incorrect json syntax");
+        }
+        catch(RequiredParameterException ex)
+        {
+            response.put("error", "syntax_parameters");
+            response.put("message", "Missing required parameter(s)");
         }
         catch (IllegalArgumentException e)
         {
