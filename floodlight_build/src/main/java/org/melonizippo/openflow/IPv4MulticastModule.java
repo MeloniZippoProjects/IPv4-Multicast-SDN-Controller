@@ -240,7 +240,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         restApiService = floodlightModuleContext.getServiceImpl(IRestApiService.class);
 
         //todo: maybe change it in a configuration file
-        unicastPool = IPv4AddressWithMask.of("192.168.0.0/24");
+        unicastPool = IPv4AddressWithMask.of("10.0.0.0/24");
         multicastPool = IPv4AddressWithMask.of("224.0.100.0/24");
         multicastGroups = new ConcurrentSkipListSet<>();
     }
