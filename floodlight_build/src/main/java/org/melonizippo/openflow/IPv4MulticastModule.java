@@ -29,8 +29,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     protected IFloodlightProviderService floodlightProvider;
     protected IRestApiService restApiService;
 
-    private IPv4Address defaultGatewayIpAddress;
-    private MacAddress defaultGatewayMacAddress;
+    private IPv4Address virtualGatewayIpAddress;
+    private MacAddress virtualGatewayMacAddress;
 
     private IPv4AddressWithMask unicastPool;
     private IPv4AddressWithMask multicastPool;
@@ -39,9 +39,12 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     private Map<String, Integer> OFGroupsIds;
 
     // Rule timeouts
-    private static short IDLE_TIMEOUT = 10; // in seconds
-    private static short HARD_TIMEOUT = 20; // every 20 seconds drop the entry
-    ;
+    private static final short IDLE_TIMEOUT = 10; // in seconds
+    private static final short HARD_TIMEOUT = 20; // every 20 seconds drop the entry
+
+    private static final byte ARP_ETH_PRIORITY = 1;
+    private static final byte ICMP_ETH_PRIORITY = 1;
+
 
     public Set<MulticastGroup> getMulticastGroups()
     {
@@ -100,22 +103,119 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             throw new HostNotFoundException();
     }
 
-    public OFPacketOut encapsulatePacket(OFPacketIn packetIn, OFFactory factory , IPacket packet)
+    public OFPacketOut encapsulateReply(OFPacketIn packetIn, OFFactory factory , IPacket replyPacket)
     {
         OFPacketOut.Builder pob = factory.buildPacketOut();
         pob.setBufferId(OFBufferId.NO_BUFFER);
-        pob.setInPort(OFPort.ANY);
+        pob.setInPort(OFPort.CONTROLLER);
 
         //set output action
         OFActionOutput.Builder actionBuilder = factory.actions().buildOutput();
-        OFPort inPort = packetIn.getMatch().get(MatchField.IN_PORT);
-        actionBuilder.setPort(inPort);
+        OFPort requestPort = packetIn.getMatch().get(MatchField.IN_PORT);
+        actionBuilder.setPort(requestPort);
         pob.setActions(Collections.singletonList((OFAction) actionBuilder.build()));
 
         //set arp reply as pkt data
-        pob.setData(packet.serialize());
+        pob.setData(replyPacket.serialize());
 
         return pob.build();
+    }
+
+    public void processARPPacket(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
+    {
+        //todo: add learning process
+
+        //if it is the gateway ip address we must also build an arp response
+        if(arpPacket.getTargetProtocolAddress().equals(virtualGatewayIpAddress))
+            interceptVirtualGatewayARPRequest(arpPacket, packetIn, iofSwitch);
+    }
+
+    public void interceptVirtualGatewayARPRequest(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
+    {
+        IPacket arpReply = new Ethernet()
+                .setSourceMACAddress(virtualGatewayMacAddress)
+                .setDestinationMACAddress(arpPacket.getSenderHardwareAddress())
+                .setEtherType(EthType.ARP)
+                .setPriorityCode(ARP_ETH_PRIORITY)
+                .setPayload(
+                        new ARP()
+                                .setHardwareType(ARP.HW_TYPE_ETHERNET)
+                                .setProtocolType(ARP.PROTO_TYPE_IP)
+                                .setHardwareAddressLength((byte)6)
+                                .setProtocolAddressLength((byte)4)
+                                .setOpCode(ARP.OP_REPLY)
+                                .setSenderHardwareAddress(virtualGatewayMacAddress)
+                                .setSenderProtocolAddress(virtualGatewayIpAddress)
+                                .setTargetHardwareAddress(arpPacket.getSenderHardwareAddress())
+                                .setTargetProtocolAddress(arpPacket.getSenderProtocolAddress())
+                );
+
+        //send OFPacketOut with reply
+        OFPacketOut packetOut = encapsulateReply(packetIn, iofSwitch.getOFFactory(), arpReply );
+        iofSwitch.write(packetOut);
+    }
+
+    public void interceptVirtualGatewayEchoRequest(
+            ICMP echoRequest,
+            MacAddress requestMacAddress,
+            IPv4Address requestIPAddress,
+            OFPacketIn packetIn,
+            IOFSwitch iofSwitch)
+    {
+        IPacket icmpReply = new Ethernet()
+                .setSourceMACAddress(virtualGatewayMacAddress)
+                .setDestinationMACAddress(requestMacAddress)
+                .setEtherType(EthType.IPv4)
+                .setPriorityCode(ICMP_ETH_PRIORITY)
+                .setPayload(
+                        new IPv4()
+                                .setProtocol(IpProtocol.ICMP)
+                                .setDestinationAddress(requestIPAddress)
+                                .setSourceAddress(virtualGatewayIpAddress)
+                                .setTtl((byte)64)
+                                // Set the same payload included in the request
+                                .setPayload(
+                                        new ICMP()
+                                                .setIcmpType(ICMP.ECHO_REPLY)
+                                                .setIcmpCode((byte) 0)
+                                                .setPayload(echoRequest.getPayload())
+                                )
+                );
+
+        //send OFPacketOut with reply
+        OFPacketOut packetOut = encapsulateReply(packetIn, iofSwitch.getOFFactory(), icmpReply );
+        iofSwitch.write(packetOut);
+    }
+
+    public void setMulticastFlowMod(
+            IPv4Address destinationAddress,
+            IOFSwitch iofSwitch)
+    {
+        //todo: check if toString is correct output
+        if(!OFGroupsIds.containsKey(destinationAddress.toString()))
+            createNewOFGroup(iofSwitch, destinationAddress);
+
+        //get available action types
+        OFActions actions = iofSwitch.getOFFactory().actions();
+
+        //create flow-mod for this packet in
+        OFFlowAdd.Builder flowModBuilder = iofSwitch.getOFFactory().buildFlowAdd();
+        flowModBuilder.setIdleTimeout(IDLE_TIMEOUT);
+        flowModBuilder.setHardTimeout(HARD_TIMEOUT);
+
+        ArrayList<OFAction> actionList = new ArrayList<OFAction>();
+        int groupId = OFGroupsIds.get(destinationAddress.toString());
+        actionList.add(actions.buildGroup().setGroup(OFGroup.of(groupId)).build());
+
+        flowModBuilder.setActions(actionList);
+
+        //create matcher for this multicast ip
+        Match.Builder matchBuilder = iofSwitch.getOFFactory().buildMatch();
+        matchBuilder.setExact(MatchField.ETH_TYPE, EthType.IPv4)
+                .setExact(MatchField.IPV4_DST, destinationAddress);
+
+        flowModBuilder.setMatch(matchBuilder.build());
+        iofSwitch.write(flowModBuilder.build());
     }
 
     public Command receive(IOFSwitch iofSwitch, OFMessage ofMessage, FloodlightContext floodlightContext) {
@@ -128,33 +228,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         //intercept arp requests
         if(eth.getEtherType() == EthType.ARP)
         {
-            ARP payload = (ARP) eth.getPayload();
-
-            //if it is the gateway ip address we must also build an arp response
-            if(payload.getTargetProtocolAddress().equals(defaultGatewayIpAddress))
-            {
-                IPacket arpReply = new Ethernet()
-                        .setSourceMACAddress(defaultGatewayMacAddress)
-                        .setDestinationMACAddress(eth.getSourceMACAddress())
-                        .setEtherType(EthType.ARP)
-                        .setPriorityCode(eth.getPriorityCode())
-                        .setPayload(
-                                new ARP()
-                                .setHardwareType(ARP.HW_TYPE_ETHERNET)
-                                .setProtocolType(ARP.PROTO_TYPE_IP)
-                                .setHardwareAddressLength((byte)6)
-                                .setProtocolAddressLength((byte)4)
-                                .setOpCode(ARP.OP_REPLY)
-                                .setSenderHardwareAddress(defaultGatewayMacAddress)
-                                .setSenderProtocolAddress(defaultGatewayIpAddress)
-                                .setTargetHardwareAddress(payload.getSenderHardwareAddress())
-                                .setTargetProtocolAddress(payload.getSenderProtocolAddress())
-                        );
-
-                //send OFPacketOut with reply
-                OFPacketOut packetOut = encapsulatePacket(packetIn, iofSwitch.getOFFactory(), arpReply );
-                iofSwitch.write(packetOut);
-            }
+            ARP arpPacket = (ARP) eth.getPayload();
+            processARPPacket(arpPacket, packetIn, iofSwitch);
         }
 
         //consider only ipv4 packets
@@ -163,68 +238,30 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             IPv4 ipv4Packet = (IPv4) eth.getPayload();
             IPv4Address destinationAddress = ipv4Packet.getDestinationAddress();
 
-            //answer to ICMP pings
-            if(ipv4Packet.getDestinationAddress().equals(defaultGatewayIpAddress) &&
+            //answer to ICMP pings to virtual gateway
+            if(ipv4Packet.getDestinationAddress().equals(virtualGatewayIpAddress) &&
                     ipv4Packet.getPayload() instanceof ICMP)
             {
                 ICMP icmpPacket = (ICMP) ipv4Packet.getPayload();
-
-                IPacket icmpReply = new Ethernet()
-                        .setSourceMACAddress(defaultGatewayMacAddress)
-                        .setDestinationMACAddress(eth.getSourceMACAddress())
-                        .setEtherType(EthType.IPv4)
-                        .setPriorityCode(eth.getPriorityCode())
-                        .setPayload(
-                                new IPv4()
-                                        .setProtocol(IpProtocol.ICMP)
-                                        .setDestinationAddress(ipv4Packet.getSourceAddress())
-                                        .setSourceAddress(defaultGatewayIpAddress)
-                                        .setTtl((byte)64)
-                                // Set the same payload included in the request
-                                        .setPayload(
-                                                new ICMP()
-                                                    .setIcmpType(ICMP.ECHO_REPLY)
-                                                    .setIcmpCode(icmpPacket.getIcmpCode())
-                                                    .setPayload(icmpPacket.getPayload())
-                                        )
-                        );
-
-                //send OFPacketOut with reply
-                OFPacketOut packetOut = encapsulatePacket(packetIn, iofSwitch.getOFFactory(), icmpReply );
-                iofSwitch.write(packetOut);
+                if(icmpPacket.getIcmpType() == ICMP.ECHO_REQUEST)
+                    interceptVirtualGatewayEchoRequest(
+                            icmpPacket,
+                            eth.getSourceMACAddress(),
+                            ipv4Packet.getSourceAddress(),
+                            packetIn,
+                            iofSwitch);
             }
 
             //todo: should check if the destinationAddress is a multicast address in IPv4 sense?
 
             //if set contains the dest address, it is a valid multicast group
-            Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getIp() == destinationAddress).findFirst();
+            Optional<MulticastGroup> target =
+                    multicastGroups.stream()
+                            .filter(group -> group.getIp() == destinationAddress)
+                            .findFirst();
             if(target.isPresent())
             {
-                //todo: check if toString is correct output
-                if(!OFGroupsIds.containsKey(destinationAddress.toString()))
-                    createNewOFGroup(iofSwitch, destinationAddress);
-
-                //get available action types
-                OFActions actions = iofSwitch.getOFFactory().actions();
-
-                //create flow-mod for this packet in
-                OFFlowAdd.Builder flowModBuilder = iofSwitch.getOFFactory().buildFlowAdd();
-                flowModBuilder.setIdleTimeout(IDLE_TIMEOUT);
-                flowModBuilder.setHardTimeout(HARD_TIMEOUT);
-
-                ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-                int groupId = OFGroupsIds.get(destinationAddress.toString());
-                actionList.add(actions.buildGroup().setGroup(OFGroup.of(groupId)).build());
-
-                flowModBuilder.setActions(actionList);
-
-                //create matcher for this multicast ip
-                Match.Builder matchBuilder = iofSwitch.getOFFactory().buildMatch();
-                matchBuilder.setExact(MatchField.ETH_TYPE, EthType.IPv4)
-                        .setExact(MatchField.IPV4_DST, destinationAddress);
-
-                flowModBuilder.setMatch(matchBuilder.build());
-                iofSwitch.write(flowModBuilder.build());
+                setMulticastFlowMod(destinationAddress, iofSwitch);
             }
         }
 
@@ -321,8 +358,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         restApiService = floodlightModuleContext.getServiceImpl(IRestApiService.class);
 
         //set defaultGateway virtual IPv4 address
-        defaultGatewayIpAddress = IPv4Address.of("10.0.0.100");
-        defaultGatewayMacAddress = MacAddress.of("00:00:00:00:00:64");
+        virtualGatewayIpAddress = IPv4Address.of("10.0.0.100");
+        virtualGatewayMacAddress = MacAddress.of("00:00:00:00:00:64");
 
         //todo: maybe change it in a configuration file
         unicastPool = IPv4AddressWithMask.of("10.0.0.0/8");
