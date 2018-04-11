@@ -15,11 +15,12 @@ class SingleSwitchTopo(Topo):
         # Python's range(N) generates 0..N-1
         for h in range(n):
             host = self.addHost('h%s' % (h + 1))
+            host.cmd("route add default gw 10.0.0.100")
             self.addLink(host, switch)
 
 def simpleTest():
     "Create and test a simple network"
-    topo = SingleSwitchTopo(n=4)
+    topo = SingleSwitchTopo(n=3)
     net = Mininet(topo=topo, controller=partial( RemoteController, ip='192.168.100.93', port=6653))
     net.start()
     print("Dumping host connections")
