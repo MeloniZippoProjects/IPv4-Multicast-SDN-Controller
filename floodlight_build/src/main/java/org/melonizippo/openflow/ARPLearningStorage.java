@@ -3,14 +3,18 @@ package org.melonizippo.openflow;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.packet.ARP;
 import org.projectfloodlight.openflow.protocol.OFPacketIn;
-import org.projectfloodlight.openflow.types.ArpOpcode;
+import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.MacAddress;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class ARPLearningStorage {
+    protected final static Logger logger = LoggerFactory.getLogger(ARPLearningStorage.class);
+
     private Map<Long, SwitchARPLearningStorage> storage = new HashMap<>();
 
     public HostL2Details getHostL2Details(IOFSwitch iofSwitch, IPv4Address hostAddress)
@@ -57,6 +61,27 @@ public class ARPLearningStorage {
 
             entry.mac = hostMac;
             entry.port = port;
+        }
+
+        public void logStorageStatus()
+        {
+            for (Map.Entry<IPv4Address, HostL2Details> storageEntry :
+                    storage.entrySet())
+            {
+                logger.info(storageEntry.getKey().toString() + " => (" +
+                    storageEntry.getValue().mac + ", " + storageEntry.getValue().port + ")");
+            }
+        }
+    }
+
+    public void logStorageStatus()
+    {
+        logger.info("Printing ARP storage current status: ");
+        for(Map.Entry<Long, SwitchARPLearningStorage> switchStorageEntry :
+                storage.entrySet())
+        {
+            logger.info("Switch " + switchStorageEntry.getKey().toString() + ":");
+            switchStorageEntry.getValue().logStorageStatus();
         }
     }
 }
