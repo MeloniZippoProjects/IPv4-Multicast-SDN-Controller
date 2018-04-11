@@ -4,6 +4,9 @@ from mininet.topo import Topo
 from mininet.net import Mininet
 from mininet.util import dumpNodeConnections
 from mininet.log import setLogLevel
+from mininet.node import RemoteController
+from functools import partial
+from mininet.cli import CLI
 
 class SingleSwitchTopo(Topo):
     "Single switch connected to n hosts."
@@ -17,12 +20,13 @@ class SingleSwitchTopo(Topo):
 def simpleTest():
     "Create and test a simple network"
     topo = SingleSwitchTopo(n=4)
-    net = Mininet(topo)
+    net = Mininet(topo=topo, controller=partial( RemoteController, ip='192.168.100.93', port=6653))
     net.start()
     print("Dumping host connections")
     dumpNodeConnections(net.hosts)
     print("Testing network connectivity")
     net.pingAll()
+    CLI(net)
     net.stop()
 
 if __name__ == '__main__':
