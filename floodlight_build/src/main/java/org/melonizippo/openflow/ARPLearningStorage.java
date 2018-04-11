@@ -21,7 +21,7 @@ public class ARPLearningStorage {
     {
         long switchId = iofSwitch.getId().getLong();
         SwitchARPLearningStorage switchStorage = storage.get(switchId);
-        return  switchStorage == null ? switchStorage.getHostL2Details(hostAddress) : null;
+        return  switchStorage != null ? switchStorage.getHostL2Details(hostAddress) : null;
     }
 
     public void learnFromARP(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
@@ -50,7 +50,7 @@ public class ARPLearningStorage {
         {
             IPv4Address hostAddress = arpPacket.getSenderProtocolAddress();
             MacAddress hostMac = arpPacket.getSenderHardwareAddress();
-            int port = packetIn.getInPort().getPortNumber();
+            int port = packetIn.getMatch().get(MatchField.IN_PORT).getPortNumber();
 
             HostL2Details entry = storage.get(hostAddress);
             if(entry == null)
