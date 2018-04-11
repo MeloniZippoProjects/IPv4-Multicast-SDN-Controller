@@ -1,6 +1,9 @@
 package org.melonizippo.openflow;
 
-import net.floodlightcontroller.core.*;
+import net.floodlightcontroller.core.FloodlightContext;
+import net.floodlightcontroller.core.IFloodlightProviderService;
+import net.floodlightcontroller.core.IOFMessageListener;
+import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
@@ -18,7 +21,8 @@ import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
 import org.projectfloodlight.openflow.types.*;
-import org.slf4j.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,6 +41,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     private Set<MulticastGroup> multicastGroups;
     private Map<String, Integer> OFGroupsIds;
+
+    private ARPLearningStorage arpLearningStorage;
 
     // Rule timeouts
     private static final short IDLE_TIMEOUT = 10; // in seconds
@@ -103,6 +109,56 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             throw new HostNotFoundException();
     }
 
+     public Command receive(IOFSwitch iofSwitch, OFMessage ofMessage, FloodlightContext floodlightContext) {
+
+        OFPacketIn packetIn = (OFPacketIn) ofMessage;
+        Ethernet eth =
+                IFloodlightProviderService.bcStore.get(floodlightContext,
+                        IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+
+        //intercept arp requests
+        if(eth.getEtherType() == EthType.ARP)
+        {
+            ARP arpPacket = (ARP) eth.getPayload();
+            processARPPacket(arpPacket, packetIn, iofSwitch);
+        }
+
+        //consider only ipv4 packets
+        if(eth.getEtherType() == EthType.IPv4)
+        {
+            IPv4 ipv4Packet = (IPv4) eth.getPayload();
+            IPv4Address destinationAddress = ipv4Packet.getDestinationAddress();
+
+            //answer to ICMP pings to virtual gateway
+            if(ipv4Packet.getDestinationAddress().equals(virtualGatewayIpAddress) &&
+                    ipv4Packet.getPayload() instanceof ICMP)
+            {
+                ICMP icmpPacket = (ICMP) ipv4Packet.getPayload();
+                if(icmpPacket.getIcmpType() == ICMP.ECHO_REQUEST)
+                    interceptVirtualGatewayEchoRequest(
+                            icmpPacket,
+                            eth.getSourceMACAddress(),
+                            ipv4Packet.getSourceAddress(),
+                            packetIn,
+                            iofSwitch);
+            }
+
+            //todo: should check if the destinationAddress is a multicast address in IPv4 sense?
+
+            //if set contains the dest address, it is a valid multicast group
+            Optional<MulticastGroup> target =
+                    multicastGroups.stream()
+                            .filter(group -> group.getIp() == destinationAddress)
+                            .findFirst();
+            if(target.isPresent())
+            {
+                setMulticastFlowMod(destinationAddress, iofSwitch);
+            }
+        }
+
+        return Command.CONTINUE;
+    }
+
     public OFPacketOut encapsulateReply(OFPacketIn packetIn, OFFactory factory , IPacket replyPacket)
     {
         OFPacketOut.Builder pob = factory.buildPacketOut();
@@ -123,7 +179,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public void processARPPacket(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
     {
-        //todo: add learning process
+        if(!arpPacket.getSenderProtocolAddress().equals(virtualGatewayIpAddress))
+            arpLearningStorage.learnFromARP(arpPacket, packetIn,iofSwitch);
 
         //if it is the gateway ip address we must also build an arp response
         if(arpPacket.getTargetProtocolAddress().equals(virtualGatewayIpAddress))
@@ -216,56 +273,6 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
         flowModBuilder.setMatch(matchBuilder.build());
         iofSwitch.write(flowModBuilder.build());
-    }
-
-    public Command receive(IOFSwitch iofSwitch, OFMessage ofMessage, FloodlightContext floodlightContext) {
-
-        OFPacketIn packetIn = (OFPacketIn) ofMessage;
-        Ethernet eth =
-                IFloodlightProviderService.bcStore.get(floodlightContext,
-                        IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
-
-        //intercept arp requests
-        if(eth.getEtherType() == EthType.ARP)
-        {
-            ARP arpPacket = (ARP) eth.getPayload();
-            processARPPacket(arpPacket, packetIn, iofSwitch);
-        }
-
-        //consider only ipv4 packets
-        if(eth.getEtherType() == EthType.IPv4)
-        {
-            IPv4 ipv4Packet = (IPv4) eth.getPayload();
-            IPv4Address destinationAddress = ipv4Packet.getDestinationAddress();
-
-            //answer to ICMP pings to virtual gateway
-            if(ipv4Packet.getDestinationAddress().equals(virtualGatewayIpAddress) &&
-                    ipv4Packet.getPayload() instanceof ICMP)
-            {
-                ICMP icmpPacket = (ICMP) ipv4Packet.getPayload();
-                if(icmpPacket.getIcmpType() == ICMP.ECHO_REQUEST)
-                    interceptVirtualGatewayEchoRequest(
-                            icmpPacket,
-                            eth.getSourceMACAddress(),
-                            ipv4Packet.getSourceAddress(),
-                            packetIn,
-                            iofSwitch);
-            }
-
-            //todo: should check if the destinationAddress is a multicast address in IPv4 sense?
-
-            //if set contains the dest address, it is a valid multicast group
-            Optional<MulticastGroup> target =
-                    multicastGroups.stream()
-                            .filter(group -> group.getIp() == destinationAddress)
-                            .findFirst();
-            if(target.isPresent())
-            {
-                setMulticastFlowMod(destinationAddress, iofSwitch);
-            }
-        }
-
-        return Command.CONTINUE;
     }
 
     private void createNewOFGroup(IOFSwitch iofSwitch, IPv4Address multicastAddress) 
