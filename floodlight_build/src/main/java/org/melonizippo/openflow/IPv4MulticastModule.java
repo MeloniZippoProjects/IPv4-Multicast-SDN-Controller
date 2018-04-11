@@ -23,7 +23,6 @@ import org.slf4j.*;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentSkipListSet;
 
 public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService {
     private final static Logger logger = LoggerFactory.getLogger(IPv4MulticastModule.class);
@@ -126,10 +125,6 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
                 OFFlowAdd.Builder flowModBuilder = iofSwitch.getOFFactory().buildFlowAdd();
                 flowModBuilder.setIdleTimeout(IDLE_TIMEOUT);
                 flowModBuilder.setHardTimeout(HARD_TIMEOUT);
-                flowModBuilder.setBufferId(OFBufferId.NO_BUFFER);
-                flowModBuilder.setOutPort(OFPort.ANY);
-                flowModBuilder.setCookie(U64.of(0));
-                flowModBuilder.setPriority(FlowModUtils.PRIORITY_MAX);
 
                 ArrayList<OFAction> actionList = new ArrayList<OFAction>();
                 int groupId = OFGroupsIds.get(destinationAddress.toString());
@@ -184,14 +179,14 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
             OFBucket forwardPacket = iofSwitch.getOFFactory().buildBucket()
                     .setActions(actionList)
-                    .setWatchGroup(OFGroup.ANY)
-                    .setWatchPort(OFPort.ANY)
                     .build();
 
             buckets.add(forwardPacket);
         }
 
         iofSwitch.write(multicastActionGroup);
+
+        OFGroupsIds.put(multicastAddress.toString(), groupId);
     }
 
     public String getName() 
