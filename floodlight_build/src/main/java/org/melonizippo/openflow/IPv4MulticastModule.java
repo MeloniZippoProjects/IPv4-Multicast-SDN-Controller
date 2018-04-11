@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService {
     private final static Logger logger = LoggerFactory.getLogger(IPv4MulticastModule.class);
+    public static final int MTU = 1500;
 
     protected IFloodlightProviderService floodlightProvider;
     protected IRestApiService restApiService;
@@ -148,7 +149,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             //if set contains the dest address, it is a valid multicast group
             Optional<MulticastGroup> target =
                     multicastGroups.stream()
-                            .filter(group -> group.getIp() == destinationAddress)
+                            .filter(group -> group.getIp().equals(destinationAddress))
                             .findFirst();
             if(target.isPresent())
             {
@@ -179,8 +180,10 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public void processARPPacket(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
     {
-        if(!arpPacket.getSenderProtocolAddress().equals(virtualGatewayIpAddress))
-            arpLearningStorage.learnFromARP(arpPacket, packetIn,iofSwitch);
+        if(!arpPacket.getSenderProtocolAddress().equals(virtualGatewayIpAddress)) {
+            arpLearningStorage.learnFromARP(arpPacket, packetIn, iofSwitch);
+            arpLearningStorage.logStorageStatus();
+        }
 
         //if it is the gateway ip address we must also build an arp response
         if(arpPacket.getTargetProtocolAddress().equals(virtualGatewayIpAddress))
@@ -277,19 +280,14 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     private void createNewOFGroup(IOFSwitch iofSwitch, IPv4Address multicastAddress) 
     {
-        MulticastGroup multicastGroup = multicastGroups.stream().filter(group -> group.getIp() == multicastAddress).findFirst().get();
+        MulticastGroup multicastGroup = multicastGroups.stream().filter(group -> group.getIp().equals(multicastAddress)).findFirst().get();
         int groupId;
         if(!OFGroupsIds.isEmpty())
              groupId = Collections.max(OFGroupsIds.values()) + 1;
         else
             groupId = 1;
 
-        OFGroupAdd multicastActionGroup = iofSwitch.getOFFactory().buildGroupAdd()
-                .setGroup(OFGroup.of(groupId))    //todo: is it an id? make them unique to avoid overwriting?
-                .setGroupType(OFGroupType.ALL)
-                .build();
-
-        List<OFBucket> buckets = multicastActionGroup.getBuckets();
+        List<OFBucket> buckets = new ArrayList<>();
 
         //get available action types
         OFActions actions = iofSwitch.getOFFactory().actions();
@@ -299,21 +297,41 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         for(IPv4Address hostIP : multicastGroup.getPartecipants())
         {
             ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-            OFActionSetField forwardAction = actions.buildSetField()
+
+            HostL2Details hostDetails = arpLearningStorage.getHostL2Details(iofSwitch, hostIP);
+            OFActionSetField setIpv4Field = actions.buildSetField()
                     .setField(
                             oxms.buildIpv4Dst()
                                     .setValue(hostIP)
                                     .build()
                     ).build();
-            actionList.add(forwardAction);
+            actionList.add(setIpv4Field);
+
+            OFActionSetField setMacField = actions.buildSetField()
+                    .setField(
+                            oxms.buildEthDst()
+                                    .setValue(hostDetails.mac)
+                                    .build()
+                    ).build();
+            actionList.add(setMacField);
+
+            OFActionOutput outputPacket = actions.output(OFPort.of(hostDetails.port), MTU);
+            actionList.add(outputPacket);
 
             OFBucket forwardPacket = iofSwitch.getOFFactory().buildBucket()
                     .setActions(actionList)
                     .build();
 
             buckets.add(forwardPacket);
+
+
         }
 
+        OFGroupAdd multicastActionGroup = iofSwitch.getOFFactory().buildGroupAdd()
+                .setGroup(OFGroup.of(groupId))    //todo: is it an id? make them unique to avoid overwriting?
+                .setGroupType(OFGroupType.ALL)
+                .setBuckets(buckets)
+                .build();
         iofSwitch.write(multicastActionGroup);
 
         OFGroupsIds.put(multicastAddress.toString(), groupId);
@@ -372,6 +390,12 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         unicastPool = IPv4AddressWithMask.of("10.0.0.0/8");
         multicastPool = IPv4AddressWithMask.of("11.0.1.0/8");
         multicastGroups = ConcurrentHashMap.newKeySet();
+
+        //initialize arp storage
+        arpLearningStorage = new ARPLearningStorage();
+
+        //initialize OFGroupsId
+        OFGroupsIds = new HashMap<String, Integer>();
     }
 
     public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException 
