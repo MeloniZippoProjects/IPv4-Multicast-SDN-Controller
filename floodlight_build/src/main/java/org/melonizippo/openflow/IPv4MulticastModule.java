@@ -290,52 +290,10 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     private void addOFGroupToSwitch(MulticastGroup multicastGroup, IOFSwitch iofSwitch)
     {
-        int groupId = multicastGroup.getId();
-
-        List<OFBucket> buckets = new ArrayList<>();
-
-        //get available action types
-        OFActions actions = iofSwitch.getOFFactory().actions();
-        //Open Flow extendable matches, needed to create actions
-        OFOxms oxms = iofSwitch.getOFFactory().oxms();
-
-        for(IPv4Address hostIP : multicastGroup.getPartecipants())
-        {
-            ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-
-            HostL2Details hostDetails = arpLearningStorage.getHostL2Details(iofSwitch, hostIP);
-            OFActionSetField setIpv4Field = actions.buildSetField()
-                    .setField(
-                            oxms.buildIpv4Dst()
-                                    .setValue(hostIP)
-                                    .build()
-                    ).build();
-            actionList.add(setIpv4Field);
-
-            OFActionSetField setMacField = actions.buildSetField()
-                    .setField(
-                            oxms.buildEthDst()
-                                    .setValue(hostDetails.mac)
-                                    .build()
-                    ).build();
-            actionList.add(setMacField);
-
-            OFActionOutput outputPacket = actions.output(OFPort.of(hostDetails.port), MTU);
-            actionList.add(outputPacket);
-
-            OFBucket forwardPacket = iofSwitch.getOFFactory().buildBucket()
-                    .setActions(actionList)
-                    .setWatchPort(OFPort.ANY)
-                    .setWatchGroup(OFGroup.ANY)
-                    .build();
-
-            buckets.add(forwardPacket);
-        }
-
         OFGroupAdd multicastActionGroup = iofSwitch.getOFFactory().buildGroupAdd()
-                .setGroup(OFGroup.of(groupId))
+                .setGroup(OFGroup.of(multicastGroup.getId()))
                 .setGroupType(OFGroupType.ALL)
-                .setBuckets(buckets)
+                .setBuckets(multicastGroup.getBuckets(iofSwitch, arpLearningStorage))
                 .build();
         iofSwitch.write(multicastActionGroup);
 
