@@ -26,11 +26,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService {
     private final static Logger logger = LoggerFactory.getLogger(IPv4MulticastModule.class);
     public static final int MTU = 1500;
-    private final org.melonizippo.openflow.IPv4MulticastDelegate multicastDelegate = new IPv4MulticastDelegate();
 
     protected IFloodlightProviderService floodlightProvider;
     protected IRestApiService restApiService;
@@ -38,6 +38,10 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     private IPv4Address virtualGatewayIpAddress;
     private MacAddress virtualGatewayMacAddress;
 
+    private IPv4AddressWithMask unicastPool;
+    private IPv4AddressWithMask multicastPool;
+
+    private Set<MulticastGroup> multicastGroups;
     private Map<String, Integer> OFGroupsIds;
 
     private ARPLearningStorage arpLearningStorage;
@@ -52,34 +56,59 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public Set<MulticastGroup> getMulticastGroups()
     {
-        return multicastDelegate.getMulticastGroups();
+        return Collections.unmodifiableSet(multicastGroups);
     }
 
     public Integer addGroup(IPv4Address groupIP, String groupName) throws GroupAlreadyExistsException, GroupAddressOutOfPoolException
     {
+        if(!multicastPool.contains(groupIP))
+            throw new GroupAddressOutOfPoolException();
 
-        return multicastDelegate.addGroup(groupIP, groupName);
+        Optional duplicate = multicastGroups.stream().filter( group -> group.getIp().equals(groupIP)).findFirst();
+        if(!duplicate.isPresent())
+        {
+            Integer groupID = MulticastGroup.IDFactory.incrementAndGet();
+            MulticastGroup newGroup = new MulticastGroup(groupIP, groupName, groupID);
+            multicastGroups.add(newGroup);
+            return groupID;
+        }
+        else
+            throw new GroupAlreadyExistsException();
     }
 
     public MulticastGroup getGroup(Integer groupID) throws GroupNotFoundException
     {
+        Optional<MulticastGroup> target = multicastGroups.stream().filter(group -> group.getId() == groupID).findFirst();
+        if(target.isPresent())
+            return target.get();
+        else
+            throw new GroupNotFoundException();
 
-        return multicastDelegate.getGroup(groupID);
     }
 
     public void deleteGroup(Integer groupID) throws GroupNotFoundException
     {
-        multicastDelegate.deleteGroup(groupID);
+        MulticastGroup group = getGroup(groupID);
+        multicastGroups.remove(group);
     }
 
     public void addToGroup(Integer groupID, IPv4Address hostIP) throws GroupNotFoundException, HostAddressOutOfPoolException
     {
-        multicastDelegate.addToGroup(groupID, hostIP);
+        if(!unicastPool.contains(hostIP))
+            throw new HostAddressOutOfPoolException();
+
+        MulticastGroup group = getGroup(groupID);
+        group.getPartecipants().add(hostIP);
     }
 
     public void removeFromGroup(Integer groupID, IPv4Address hostIP) throws GroupNotFoundException, HostAddressOutOfPoolException, HostNotFoundException
     {
-        multicastDelegate.removeFromGroup(groupID, hostIP);
+        if(!unicastPool.contains(hostIP))
+            throw new HostAddressOutOfPoolException();
+
+        MulticastGroup group = getGroup(groupID);
+        if (!group.getPartecipants().remove(hostIP))
+            throw new HostNotFoundException();
     }
 
      public Command receive(IOFSwitch iofSwitch, OFMessage ofMessage, FloodlightContext floodlightContext) {
@@ -120,7 +149,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
             //if set contains the dest address, it is a valid multicast group
             Optional<MulticastGroup> target =
-                    multicastDelegate.getMulticastGroups().stream()
+                    multicastGroups.stream()
                             .filter(group -> group.getIp().equals(destinationAddress))
                             .findFirst();
             if(target.isPresent())
@@ -253,7 +282,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     private void createNewOFGroup(IOFSwitch iofSwitch, IPv4Address multicastAddress) 
     {
-        MulticastGroup multicastGroup = multicastDelegate.getMulticastGroups().stream().filter(group -> group.getIp().equals(multicastAddress)).findFirst().get();
+        MulticastGroup multicastGroup = multicastGroups.stream().filter(group -> group.getIp().equals(multicastAddress)).findFirst().get();
         int groupId;
         if(!OFGroupsIds.isEmpty())
              groupId = Collections.max(OFGroupsIds.values()) + 1;
@@ -362,7 +391,9 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         virtualGatewayMacAddress = MacAddress.of("00:00:00:00:00:64");
 
         //todo: maybe change it in a configuration file
-
+        unicastPool = IPv4AddressWithMask.of("10.0.0.0/8");
+        multicastPool = IPv4AddressWithMask.of("11.0.1.0/8");
+        multicastGroups = ConcurrentHashMap.newKeySet();
 
         //initialize arp storage
         arpLearningStorage = new ARPLearningStorage();
