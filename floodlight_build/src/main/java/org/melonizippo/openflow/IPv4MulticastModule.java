@@ -14,17 +14,16 @@ import org.melonizippo.rest.MulticastWebRoutable;
 import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
-import org.projectfloodlight.openflow.protocol.action.OFActionSetField;
 import org.projectfloodlight.openflow.protocol.action.OFActions;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
-import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
 import org.projectfloodlight.openflow.types.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService, IOFSwitchListener {
     private final static Logger logger = LoggerFactory.getLogger(IPv4MulticastModule.class);
@@ -99,6 +98,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
         MulticastGroup group = getGroup(groupID);
         group.getPartecipants().add(hostIP);
+
+        updateOFGroupInSwitches(group);
     }
 
     public void removeFromGroup(Integer groupID, IPv4Address hostIP) throws GroupNotFoundException, HostAddressOutOfPoolException, HostNotFoundException
@@ -109,9 +110,11 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         MulticastGroup group = getGroup(groupID);
         if (!group.getPartecipants().remove(hostIP))
             throw new HostNotFoundException();
+
+        updateOFGroupInSwitches(group);
     }
 
-     public Command receive(IOFSwitch iofSwitch, OFMessage ofMessage, FloodlightContext floodlightContext) {
+    public Command receive(IOFSwitch iofSwitch, OFMessage ofMessage, FloodlightContext floodlightContext) {
 
         OFPacketIn packetIn = (OFPacketIn) ofMessage;
         Ethernet eth =
@@ -290,14 +293,33 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     private void addOFGroupToSwitch(MulticastGroup multicastGroup, IOFSwitch iofSwitch)
     {
-        OFGroupAdd multicastActionGroup = iofSwitch.getOFFactory().buildGroupAdd()
+        OFGroupAdd addMulticastGroupMsg = iofSwitch.getOFFactory().buildGroupAdd()
                 .setGroup(OFGroup.of(multicastGroup.getId()))
                 .setGroupType(OFGroupType.ALL)
                 .setBuckets(multicastGroup.getBuckets(iofSwitch, arpLearningStorage))
                 .build();
-        iofSwitch.write(multicastActionGroup);
+        iofSwitch.write(addMulticastGroupMsg);
 
         logger.info("Installed group " + multicastGroup.getId() + " in switch " + iofSwitch.getId().getLong());
+    }
+
+    public void updateOFGroupInSwitches(MulticastGroup multicastGroup)
+    {
+        for ( SwitchInfo switchInfo:
+                connectedSwitches.values().stream()
+                        .filter(sw -> sw.knownGroups.contains(multicastGroup.getId()))
+                        .collect(Collectors.toList())
+            )
+        {
+            IOFSwitch iofSwitch = iofSwitchService.getSwitch(DatapathId.of(switchInfo.id));
+
+            OFGroupMod modifyMulticastGroupMsg = iofSwitch.getOFFactory().buildGroupModify()
+                    .setGroup(OFGroup.of(multicastGroup.getId()))
+                    .setGroupType(OFGroupType.ALL)
+                    .setBuckets(multicastGroup.getBuckets(iofSwitch, arpLearningStorage))
+                    .build();
+            iofSwitch.write(modifyMulticastGroupMsg);
+        }
     }
 
     public String getName() 
@@ -371,7 +393,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     @Override
     public void switchAdded(DatapathId switchId) {
         logger.info("Switch " + switchId.getLong() + " connected!");
-        connectedSwitches.put(switchId.getLong(), new SwitchInfo());
+        connectedSwitches.put(switchId.getLong(), new SwitchInfo(switchId.getLong()));
     }
 
     @Override
