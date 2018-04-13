@@ -88,6 +88,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     public void deleteGroup(Integer groupID) throws GroupNotFoundException
     {
         MulticastGroup group = getGroup(groupID);
+        removeOFGroupFromSwitches(group);
         multicastGroups.remove(group);
     }
 
@@ -303,7 +304,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         logger.info("Installed group " + multicastGroup.getId() + " in switch " + iofSwitch.getId().getLong());
     }
 
-    public void updateOFGroupInSwitches(MulticastGroup multicastGroup)
+    private void updateOFGroupInSwitches(MulticastGroup multicastGroup)
     {
         for ( SwitchInfo switchInfo:
                 connectedSwitches.values().stream()
@@ -319,6 +320,24 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
                     .setBuckets(multicastGroup.getBuckets(iofSwitch, arpLearningStorage))
                     .build();
             iofSwitch.write(modifyMulticastGroupMsg);
+        }
+    }
+
+    private void removeOFGroupFromSwitches(MulticastGroup multicastGroup)
+    {
+        for ( SwitchInfo switchInfo:
+                connectedSwitches.values().stream()
+                        .filter(sw -> sw.knownGroups.contains(multicastGroup.getId()))
+                        .collect(Collectors.toList())
+                )
+        {
+            IOFSwitch iofSwitch = iofSwitchService.getSwitch(DatapathId.of(switchInfo.id));
+
+            OFGroupDelete deleteMulticastGroupMsg = iofSwitch.getOFFactory().buildGroupDelete()
+                    .setGroup(OFGroup.of(multicastGroup.getId()))
+                    .setGroupType(OFGroupType.ALL)
+                    .build();
+            iofSwitch.write(deleteMulticastGroupMsg);
         }
     }
 
