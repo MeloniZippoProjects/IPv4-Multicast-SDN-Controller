@@ -19,7 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class MulticastGroupSetResource extends ServerResource {
-    protected static Logger log = LoggerFactory.getLogger(MulticastGroupSetResource.class);
+    protected static Logger Logger = LoggerFactory.getLogger(MulticastGroupSetResource.class);
 
     /**
      *
@@ -58,6 +58,8 @@ public class MulticastGroupSetResource extends ServerResource {
             response.put("error","none");
             response.put("message","Group correctly created");
             response.put("content", groupID.toString());
+
+            Logger.info("Created group " + groupID + " of address " + multicastAddress.toString());
         }
         catch(JsonSyntaxException ex)
         {

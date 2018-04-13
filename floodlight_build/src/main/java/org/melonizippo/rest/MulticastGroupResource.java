@@ -18,7 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class MulticastGroupResource extends ServerResource {
-    protected static Logger log = LoggerFactory.getLogger(MulticastGroupResource.class);
+    protected final static Logger Logger = LoggerFactory.getLogger(MulticastGroupResource.class);
 
     /**
      *
@@ -84,6 +84,8 @@ public class MulticastGroupResource extends ServerResource {
             multicastModule.deleteGroup(groupId);
             response.put("error", "none");
             response.put("message", "Group deleted");
+
+            Logger.info("Deleted group " + groupId);
         }
         catch(JsonSyntaxException ex)
         {
