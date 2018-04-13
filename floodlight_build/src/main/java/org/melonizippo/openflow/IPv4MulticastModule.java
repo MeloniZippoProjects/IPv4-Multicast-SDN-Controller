@@ -41,7 +41,6 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     private IPv4AddressWithMask multicastPool;
 
     private Set<MulticastGroup> multicastGroups;
-    private Map<String, Integer> OFGroupsIds;
 
     private Map<Long, SwitchInfo> connectedSwitches = new ConcurrentHashMap<>();
 
@@ -401,9 +400,6 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
         //initialize arp storage
         arpLearningStorage = new ARPLearningStorage();
-
-        //initialize OFGroupsId
-        OFGroupsIds = new HashMap<String, Integer>();
     }
 
     public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException
