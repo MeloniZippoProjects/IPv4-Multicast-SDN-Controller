@@ -160,9 +160,50 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             {
                 setMulticastRule(target.get(), iofSwitch);
             }
+            else
+            {
+                sendICMPDestinationUnreachable(
+                        ipv4Packet,
+                        eth.getSourceMACAddress(),
+                        ipv4Packet.getSourceAddress(),
+                        packetIn,
+                        iofSwitch
+                        );
+            }
         }
 
         return Command.CONTINUE;
+    }
+
+    private void sendICMPDestinationUnreachable(IPacket originalPacket,
+                                                MacAddress requestMacAddress,
+                                                IPv4Address requestIPAddress,
+                                                OFPacketIn packetIn,
+                                                IOFSwitch iofSwitch)
+    {
+        IPacket icmpDestinationUnreachable = new Ethernet()
+                .setSourceMACAddress(virtualGatewayMacAddress)
+                .setDestinationMACAddress(requestMacAddress)
+                .setEtherType(EthType.IPv4)
+                .setPriorityCode(ICMP_ETH_PRIORITY)
+                .setPayload(
+                        new IPv4()
+                                .setProtocol(IpProtocol.ICMP)
+                                .setDestinationAddress(requestIPAddress)
+                                .setSourceAddress(virtualGatewayIpAddress)
+                                .setTtl((byte)64)
+                                // Set the same payload included in the request
+                                .setPayload(
+                                        new ICMP()
+                                                .setIcmpType(ICMP.DESTINATION_UNREACHABLE)
+                                                .setIcmpCode((byte) 7)
+                                                .setPayload(originalPacket)
+                                )
+                );
+
+        //send OFPacketOut with reply
+        OFPacketOut packetOut = encapsulateReply(packetIn, iofSwitch.getOFFactory(), icmpDestinationUnreachable );
+        iofSwitch.write(packetOut);
     }
 
     public OFPacketOut encapsulateReply(OFPacketIn packetIn, OFFactory factory , IPacket replyPacket)
