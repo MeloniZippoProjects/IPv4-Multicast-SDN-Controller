@@ -18,7 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class MulticastGroupHostsResource extends ServerResource {
-    protected static Logger log = LoggerFactory.getLogger(MulticastGroupHostsResource.class);
+    protected static Logger Logger = LoggerFactory.getLogger(MulticastGroupHostsResource.class);
 
 
     /**
@@ -49,6 +49,8 @@ public class MulticastGroupHostsResource extends ServerResource {
 
             response.put("error", "none");
             response.put("message", "Host joined this group");
+
+            Logger.info("Added host " + hostAddress.toString() + " to group " + groupId);
         }
         catch(JsonSyntaxException ex)
         {
@@ -102,6 +104,8 @@ public class MulticastGroupHostsResource extends ServerResource {
 
             response.put("error", "none");
             response.put("message", "Host unjoined this group");
+
+            Logger.info("Removed host " + hostAddress.toString() + " from group " + groupId);
         }
         catch(JsonSyntaxException ex)
         {
