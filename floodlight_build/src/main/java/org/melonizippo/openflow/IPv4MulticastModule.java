@@ -10,6 +10,7 @@ import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.packet.*;
 import net.floodlightcontroller.restserver.IRestApiService;
+import net.floodlightcontroller.util.FlowModUtils;
 import org.melonizippo.exceptions.*;
 import org.melonizippo.rest.MulticastWebRoutable;
 import org.projectfloodlight.openflow.protocol.*;
@@ -259,9 +260,10 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         OFActions actions = iofSwitch.getOFFactory().actions();
 
         //create flow-mod for this packet in
-        OFFlowAdd.Builder flowModBuilder = iofSwitch.getOFFactory().buildFlowAdd();
-        flowModBuilder.setIdleTimeout(IDLE_TIMEOUT);
-        flowModBuilder.setHardTimeout(HARD_TIMEOUT);
+        OFFlowAdd.Builder flowModBuilder = iofSwitch.getOFFactory().buildFlowAdd()
+                .setIdleTimeout(IDLE_TIMEOUT)
+                .setHardTimeout(HARD_TIMEOUT)
+                .setPriority(FlowModUtils.PRIORITY_MAX);
 
         ArrayList<OFAction> actionList = new ArrayList<OFAction>();
         int groupId = OFGroupsIds.get(destinationAddress.toString());
@@ -320,6 +322,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
             OFBucket forwardPacket = iofSwitch.getOFFactory().buildBucket()
                     .setActions(actionList)
+                    .setWatchPort(OFPort.ANY)
+                    .setWatchGroup(OFGroup.ANY)
                     .build();
 
             buckets.add(forwardPacket);
