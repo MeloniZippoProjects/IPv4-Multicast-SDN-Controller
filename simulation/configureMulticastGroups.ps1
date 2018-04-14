@@ -1,3 +1,12 @@
+param(
+    [Parameter(Mandatory=$true)][string]$restServerIP,
+    [int]$restServerPort = 8080
+)
+
+$restAPI = "http://${restServerIP}:$restServerPort/";
+
+Write-Host "Rest endpoint: $restAPI"
+
 $createGroup = @{
     "ip" = "11.0.0.1";
     "name" = "group1";
@@ -11,15 +20,12 @@ $joinHost2 = @{
     "host" = "10.0.0.2";
 } | ConvertTo-Json
 
-$restAPI = "http://192.168.100.93:8080/";
-
 function Call-Api($action, $method, $body)
 {
-    Write-Host $method
+    Write-Host $action $method
     $response = Invoke-WebRequest -Uri ($restAPI + $action) -Method $method -Body $body -ContentType "application/json"
     $response
 }
-
 
 Call-Api "multicastgroups/" 'Put' $createGroup
 Call-Api "multicastgroups/1/hosts" 'Put' $joinHost1
