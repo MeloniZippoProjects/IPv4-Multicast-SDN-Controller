@@ -22,6 +22,10 @@ def createNetwork():
     print("Dumping host connections")
     dumpNodeConnections(net.hosts)
 
+    print("Dumping host ips")
+    for host in net.hosts:
+        print(" - " + host.name + ": " +  host.IP())
+
     print("Adding default gw to hosts")
     for host in net.hosts:
         host.cmd("route add default gw " + sys.argv[2])
@@ -33,7 +37,7 @@ def createNetwork():
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
-        print("Usage: ./mnStart.py {controller address} {default gateway address}")
+        print("Usage: ./Linear.py {controller address} {default gateway address}")
         sys.exit()
     
     # Tell mininet to print useful information

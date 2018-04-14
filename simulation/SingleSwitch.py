@@ -22,6 +22,10 @@ def createNetwork():
     print("Dumping host connections")
     dumpNodeConnections(net.hosts)
 
+    print("Dumping host ips")
+    for host in net.hosts:
+        print(" - " + host.name + ": " + host.IP())
+
     print("Adding default gw to hosts")
     for host in net.hosts:
         host.cmd("route add default gw " + sys.argv[2])
