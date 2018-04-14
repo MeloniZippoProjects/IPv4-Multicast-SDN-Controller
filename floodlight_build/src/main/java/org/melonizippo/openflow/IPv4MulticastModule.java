@@ -1,38 +1,37 @@
 package org.melonizippo.openflow;
 
-import net.floodlightcontroller.core.FloodlightContext;
-import net.floodlightcontroller.core.IFloodlightProviderService;
-import net.floodlightcontroller.core.IOFMessageListener;
-import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.core.*;
+import net.floodlightcontroller.core.internal.IOFSwitchService;
 import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.packet.*;
 import net.floodlightcontroller.restserver.IRestApiService;
+import net.floodlightcontroller.util.FlowModUtils;
 import org.melonizippo.exceptions.*;
 import org.melonizippo.rest.MulticastWebRoutable;
 import org.projectfloodlight.openflow.protocol.*;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
 import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
-import org.projectfloodlight.openflow.protocol.action.OFActionSetField;
 import org.projectfloodlight.openflow.protocol.action.OFActions;
 import org.projectfloodlight.openflow.protocol.match.Match;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
-import org.projectfloodlight.openflow.protocol.oxm.OFOxms;
 import org.projectfloodlight.openflow.types.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
-public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService {
+public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService, IOFSwitchListener {
     private final static Logger logger = LoggerFactory.getLogger(IPv4MulticastModule.class);
     public static final int MTU = 1500;
 
     protected IFloodlightProviderService floodlightProvider;
     protected IRestApiService restApiService;
+    private IOFSwitchService iofSwitchService;
 
     private IPv4Address virtualGatewayIpAddress;
     private MacAddress virtualGatewayMacAddress;
@@ -41,7 +40,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     private IPv4AddressWithMask multicastPool;
 
     private Set<MulticastGroup> multicastGroups;
-    private Map<String, Integer> OFGroupsIds;
+
+    private Map<Long, SwitchInfo> connectedSwitches = new ConcurrentHashMap<>();
 
     private ARPLearningStorage arpLearningStorage;
 
@@ -88,6 +88,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     public void deleteGroup(Integer groupID) throws GroupNotFoundException
     {
         MulticastGroup group = getGroup(groupID);
+        removeOFGroupFromSwitches(group);
         multicastGroups.remove(group);
     }
 
@@ -98,6 +99,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
         MulticastGroup group = getGroup(groupID);
         group.getPartecipants().add(hostIP);
+
+        updateOFGroupInSwitches(group);
     }
 
     public void removeFromGroup(Integer groupID, IPv4Address hostIP) throws GroupNotFoundException, HostAddressOutOfPoolException, HostNotFoundException
@@ -108,9 +111,11 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         MulticastGroup group = getGroup(groupID);
         if (!group.getPartecipants().remove(hostIP))
             throw new HostNotFoundException();
+
+        updateOFGroupInSwitches(group);
     }
 
-     public Command receive(IOFSwitch iofSwitch, OFMessage ofMessage, FloodlightContext floodlightContext) {
+    public Command receive(IOFSwitch iofSwitch, OFMessage ofMessage, FloodlightContext floodlightContext) {
 
         OFPacketIn packetIn = (OFPacketIn) ofMessage;
         Ethernet eth =
@@ -153,11 +158,52 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
                             .findFirst();
             if(target.isPresent())
             {
-                setMulticastFlowMod(destinationAddress, iofSwitch);
+                setMulticastRule(target.get(), iofSwitch);
+            }
+            else
+            {
+                sendICMPDestinationUnreachable(
+                        ipv4Packet,
+                        eth.getSourceMACAddress(),
+                        ipv4Packet.getSourceAddress(),
+                        packetIn,
+                        iofSwitch
+                        );
             }
         }
 
         return Command.CONTINUE;
+    }
+
+    private void sendICMPDestinationUnreachable(IPacket originalPacket,
+                                                MacAddress requestMacAddress,
+                                                IPv4Address requestIPAddress,
+                                                OFPacketIn packetIn,
+                                                IOFSwitch iofSwitch)
+    {
+        IPacket icmpDestinationUnreachable = new Ethernet()
+                .setSourceMACAddress(virtualGatewayMacAddress)
+                .setDestinationMACAddress(requestMacAddress)
+                .setEtherType(EthType.IPv4)
+                .setPriorityCode(ICMP_ETH_PRIORITY)
+                .setPayload(
+                        new IPv4()
+                                .setProtocol(IpProtocol.ICMP)
+                                .setDestinationAddress(requestIPAddress)
+                                .setSourceAddress(virtualGatewayIpAddress)
+                                .setTtl((byte)64)
+                                // Set the same payload included in the request
+                                .setPayload(
+                                        new ICMP()
+                                                .setIcmpType(ICMP.DESTINATION_UNREACHABLE)
+                                                .setIcmpCode((byte) 7)
+                                                .setPayload(originalPacket)
+                                )
+                );
+
+        //send OFPacketOut with reply
+        OFPacketOut packetOut = encapsulateReply(packetIn, iofSwitch.getOFFactory(), icmpDestinationUnreachable );
+        iofSwitch.write(packetOut);
     }
 
     public OFPacketOut encapsulateReply(OFPacketIn packetIn, OFFactory factory , IPacket replyPacket)
@@ -247,24 +293,33 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         iofSwitch.write(packetOut);
     }
 
-    public void setMulticastFlowMod(
-            IPv4Address destinationAddress,
-            IOFSwitch iofSwitch)
+    public void setMulticastRule(MulticastGroup multicastGroup, IOFSwitch iofSwitch)
     {
         //todo: check if toString is correct output
-        if(!OFGroupsIds.containsKey(destinationAddress.toString()))
-            createNewOFGroup(iofSwitch, destinationAddress);
+
+        SwitchInfo switchInfo = connectedSwitches.get(iofSwitch.getId().getLong());
+        if(!switchInfo.knownGroups.contains(multicastGroup.getId())) {
+            addOFGroupToSwitch(multicastGroup, iofSwitch);
+            switchInfo.knownGroups.add(multicastGroup.getId());
+        }
+
+        setMulticastFlowMod(multicastGroup, iofSwitch);
+    }
+
+    public void setMulticastFlowMod(MulticastGroup multicastGroup, IOFSwitch iofSwitch)
+    {
 
         //get available action types
         OFActions actions = iofSwitch.getOFFactory().actions();
 
         //create flow-mod for this packet in
-        OFFlowAdd.Builder flowModBuilder = iofSwitch.getOFFactory().buildFlowAdd();
-        flowModBuilder.setIdleTimeout(IDLE_TIMEOUT);
-        flowModBuilder.setHardTimeout(HARD_TIMEOUT);
+        OFFlowAdd.Builder flowModBuilder = iofSwitch.getOFFactory().buildFlowAdd()
+                .setIdleTimeout(IDLE_TIMEOUT)
+                .setHardTimeout(HARD_TIMEOUT)
+                .setPriority(FlowModUtils.PRIORITY_MAX);
 
         ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-        int groupId = OFGroupsIds.get(destinationAddress.toString());
+        int groupId = multicastGroup.getId();
         actionList.add(actions.buildGroup().setGroup(OFGroup.of(groupId)).build());
 
         flowModBuilder.setActions(actionList);
@@ -272,69 +327,59 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         //create matcher for this multicast ip
         Match.Builder matchBuilder = iofSwitch.getOFFactory().buildMatch();
         matchBuilder.setExact(MatchField.ETH_TYPE, EthType.IPv4)
-                .setExact(MatchField.IPV4_DST, destinationAddress);
+                .setExact(MatchField.IPV4_DST, multicastGroup.getIp());
 
         flowModBuilder.setMatch(matchBuilder.build());
         iofSwitch.write(flowModBuilder.build());
     }
 
-    private void createNewOFGroup(IOFSwitch iofSwitch, IPv4Address multicastAddress) 
+    private void addOFGroupToSwitch(MulticastGroup multicastGroup, IOFSwitch iofSwitch)
     {
-        MulticastGroup multicastGroup = multicastGroups.stream().filter(group -> group.getIp().equals(multicastAddress)).findFirst().get();
-        int groupId;
-        if(!OFGroupsIds.isEmpty())
-             groupId = Collections.max(OFGroupsIds.values()) + 1;
-        else
-            groupId = 1;
-
-        List<OFBucket> buckets = new ArrayList<>();
-
-        //get available action types
-        OFActions actions = iofSwitch.getOFFactory().actions();
-        //Open Flow extendable matches, needed to create actions
-        OFOxms oxms = iofSwitch.getOFFactory().oxms();
-
-        for(IPv4Address hostIP : multicastGroup.getPartecipants())
-        {
-            ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-
-            HostL2Details hostDetails = arpLearningStorage.getHostL2Details(iofSwitch, hostIP);
-            OFActionSetField setIpv4Field = actions.buildSetField()
-                    .setField(
-                            oxms.buildIpv4Dst()
-                                    .setValue(hostIP)
-                                    .build()
-                    ).build();
-            actionList.add(setIpv4Field);
-
-            OFActionSetField setMacField = actions.buildSetField()
-                    .setField(
-                            oxms.buildEthDst()
-                                    .setValue(hostDetails.mac)
-                                    .build()
-                    ).build();
-            actionList.add(setMacField);
-
-            OFActionOutput outputPacket = actions.output(OFPort.of(hostDetails.port), MTU);
-            actionList.add(outputPacket);
-
-            OFBucket forwardPacket = iofSwitch.getOFFactory().buildBucket()
-                    .setActions(actionList)
-                    .build();
-
-            buckets.add(forwardPacket);
-
-
-        }
-
-        OFGroupAdd multicastActionGroup = iofSwitch.getOFFactory().buildGroupAdd()
-                .setGroup(OFGroup.of(groupId))    //todo: is it an id? make them unique to avoid overwriting?
+        OFGroupAdd addMulticastGroupMsg = iofSwitch.getOFFactory().buildGroupAdd()
+                .setGroup(OFGroup.of(multicastGroup.getId()))
                 .setGroupType(OFGroupType.ALL)
-                .setBuckets(buckets)
+                .setBuckets(multicastGroup.getBuckets(iofSwitch, arpLearningStorage))
                 .build();
-        iofSwitch.write(multicastActionGroup);
+        iofSwitch.write(addMulticastGroupMsg);
 
-        OFGroupsIds.put(multicastAddress.toString(), groupId);
+        logger.info("Installed group " + multicastGroup.getId() + " in switch " + iofSwitch.getId().getLong());
+    }
+
+    private void updateOFGroupInSwitches(MulticastGroup multicastGroup)
+    {
+        for ( SwitchInfo switchInfo:
+                connectedSwitches.values().stream()
+                        .filter(sw -> sw.knownGroups.contains(multicastGroup.getId()))
+                        .collect(Collectors.toList())
+            )
+        {
+            IOFSwitch iofSwitch = iofSwitchService.getSwitch(DatapathId.of(switchInfo.id));
+
+            OFGroupMod modifyMulticastGroupMsg = iofSwitch.getOFFactory().buildGroupModify()
+                    .setGroup(OFGroup.of(multicastGroup.getId()))
+                    .setGroupType(OFGroupType.ALL)
+                    .setBuckets(multicastGroup.getBuckets(iofSwitch, arpLearningStorage))
+                    .build();
+            iofSwitch.write(modifyMulticastGroupMsg);
+        }
+    }
+
+    private void removeOFGroupFromSwitches(MulticastGroup multicastGroup)
+    {
+        for ( SwitchInfo switchInfo:
+                connectedSwitches.values().stream()
+                        .filter(sw -> sw.knownGroups.contains(multicastGroup.getId()))
+                        .collect(Collectors.toList())
+                )
+        {
+            IOFSwitch iofSwitch = iofSwitchService.getSwitch(DatapathId.of(switchInfo.id));
+
+            OFGroupDelete deleteMulticastGroupMsg = iofSwitch.getOFFactory().buildGroupDelete()
+                    .setGroup(OFGroup.of(multicastGroup.getId()))
+                    .setGroupType(OFGroupType.ALL)
+                    .build();
+            iofSwitch.write(deleteMulticastGroupMsg);
+        }
     }
 
     public String getName() 
@@ -366,21 +411,23 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         return m;
     }
 
-    public Collection<Class<? extends IFloodlightService>> getModuleDependencies() 
+    public Collection<Class<? extends IFloodlightService>> getModuleDependencies()
     {
         Collection<Class<? extends IFloodlightService>> l =
                 new ArrayList<Class<? extends IFloodlightService>>();
         l.add(IFloodlightProviderService.class);
         l.add(IRestApiService.class);
+        l.add(IOFSwitchService.class);
         return l;
     }
 
-    public void init(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException 
+    public void init(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException
     {
         logger.info("Init...");
 
         floodlightProvider = floodlightModuleContext.getServiceImpl(IFloodlightProviderService.class);
         restApiService = floodlightModuleContext.getServiceImpl(IRestApiService.class);
+        iofSwitchService = floodlightModuleContext.getServiceImpl(IOFSwitchService.class);
 
         //set defaultGateway virtual IPv4 address
         virtualGatewayIpAddress = IPv4Address.of("10.0.0.100");
@@ -393,15 +440,45 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
         //initialize arp storage
         arpLearningStorage = new ARPLearningStorage();
-
-        //initialize OFGroupsId
-        OFGroupsIds = new HashMap<String, Integer>();
     }
 
-    public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException 
+    public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException
     {
         logger.info("Startup...");
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
+        iofSwitchService.addOFSwitchListener(this);
         restApiService.addRestletRoutable(new MulticastWebRoutable());
+    }
+
+    @Override
+    public void switchAdded(DatapathId switchId) {
+        logger.info("Switch " + switchId.getLong() + " connected!");
+        connectedSwitches.put(switchId.getLong(), new SwitchInfo(switchId.getLong()));
+    }
+
+    @Override
+    public void switchRemoved(DatapathId switchId) {
+        logger.info("Switch " + switchId.getLong() + " disconnected!");
+        connectedSwitches.remove(switchId.getLong());
+    }
+
+    @Override
+    public void switchActivated(DatapathId switchId) {
+        //we don't care about switch role
+    }
+
+    @Override
+    public void switchPortChanged(DatapathId switchId, OFPortDesc port, PortChangeType type) {
+        //we don't care about switch ports
+    }
+
+    @Override
+    public void switchChanged(DatapathId switchId) {
+        //unused by floodlight
+    }
+
+    @Override
+    public void switchDeactivated(DatapathId switchId) {
+        //we don't care about switch role
     }
 }
