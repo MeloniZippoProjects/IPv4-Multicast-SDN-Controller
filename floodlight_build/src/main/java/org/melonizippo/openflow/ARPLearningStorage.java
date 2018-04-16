@@ -6,6 +6,7 @@ import org.projectfloodlight.openflow.protocol.OFPacketIn;
 import org.projectfloodlight.openflow.protocol.match.MatchField;
 import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.MacAddress;
+import org.projectfloodlight.openflow.types.OFPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +51,7 @@ public class ARPLearningStorage {
         {
             IPv4Address hostAddress = arpPacket.getSenderProtocolAddress();
             MacAddress hostMac = arpPacket.getSenderHardwareAddress();
-            int port = packetIn.getMatch().get(MatchField.IN_PORT).getPortNumber();
+            OFPort port = packetIn.getMatch().get(MatchField.IN_PORT);
 
             HostL2Details entry = storage.get(hostAddress);
             if(entry == null)
@@ -69,7 +70,7 @@ public class ARPLearningStorage {
                     storage.entrySet())
             {
                 logger.info(storageEntry.getKey().toString() + " => (" +
-                    storageEntry.getValue().mac + ", " + storageEntry.getValue().port + ")");
+                    storageEntry.getValue().mac + ", " + storageEntry.getValue().port.getPortNumber() + ")");
             }
         }
     }
