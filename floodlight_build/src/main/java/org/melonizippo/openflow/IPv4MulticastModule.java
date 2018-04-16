@@ -164,6 +164,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             {
                 sendICMPDestinationUnreachable(
                         ipv4Packet,
+                        (byte) 7,
                         eth.getSourceMACAddress(),
                         ipv4Packet.getSourceAddress(),
                         packetIn,
