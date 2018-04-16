@@ -176,6 +176,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     }
 
     private void sendICMPDestinationUnreachable(IPacket originalPacket,
+                                                byte code,
                                                 MacAddress requestMacAddress,
                                                 IPv4Address requestIPAddress,
                                                 OFPacketIn packetIn,
@@ -196,7 +197,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
                                 .setPayload(
                                         new ICMP()
                                                 .setIcmpType(ICMP.DESTINATION_UNREACHABLE)
-                                                .setIcmpCode((byte) 7)
+                                                .setIcmpCode(code)
                                                 .setPayload(originalPacket)
                                 )
                 );
@@ -206,7 +207,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         iofSwitch.write(packetOut);
     }
 
-    public OFPacketOut encapsulateReply(OFPacketIn packetIn, OFFactory factory , IPacket replyPacket)
+    private OFPacketOut encapsulateReply(OFPacketIn packetIn, OFFactory factory, IPacket replyPacket)
     {
         OFPacketOut.Builder pob = factory.buildPacketOut();
         pob.setBufferId(OFBufferId.NO_BUFFER);
@@ -224,7 +225,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         return pob.build();
     }
 
-    public void processARPPacket(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
+    private void processARPPacket(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
     {
         if(!arpPacket.getSenderProtocolAddress().equals(virtualGatewayIpAddress)) {
             arpLearningStorage.learnFromARP(arpPacket, packetIn, iofSwitch);
@@ -236,7 +237,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             interceptVirtualGatewayARPRequest(arpPacket, packetIn, iofSwitch);
     }
 
-    public void interceptVirtualGatewayARPRequest(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
+    private void interceptVirtualGatewayARPRequest(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
     {
         IPacket arpReply = new Ethernet()
                 .setSourceMACAddress(virtualGatewayMacAddress)
@@ -261,7 +262,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         iofSwitch.write(packetOut);
     }
 
-    public void interceptVirtualGatewayEchoRequest(
+    private void interceptVirtualGatewayEchoRequest(
             ICMP echoRequest,
             MacAddress requestMacAddress,
             IPv4Address requestIPAddress,
@@ -306,9 +307,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         setMulticastFlowMod(multicastGroup, iofSwitch);
     }
 
-    public void setMulticastFlowMod(MulticastGroup multicastGroup, IOFSwitch iofSwitch)
+    private void setMulticastFlowMod(MulticastGroup multicastGroup, IOFSwitch iofSwitch)
     {
-
         //get available action types
         OFActions actions = iofSwitch.getOFFactory().actions();
 
