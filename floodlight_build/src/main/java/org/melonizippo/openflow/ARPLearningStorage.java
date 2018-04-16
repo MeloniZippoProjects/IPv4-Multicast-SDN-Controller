@@ -44,7 +44,11 @@ public class ARPLearningStorage {
 
         public HostL2Details getHostL2Details(IPv4Address address)
         {
-            return storage.get(address);
+            HostL2Details details = storage.get(address);
+            if(details != null)
+                return details;
+            else
+                return HostL2Details.FLOOD;
         }
 
         public void learnFromARP(ARP arpPacket, OFPacketIn packetIn)

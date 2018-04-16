@@ -8,4 +8,9 @@ public class HostL2Details
 {
     public MacAddress mac;
     public OFPort port;
+
+    public static final HostL2Details FLOOD = new HostL2Details() {{
+       mac = MacAddress.BROADCAST;
+       port = OFPort.FLOOD;
+    }};
 }
