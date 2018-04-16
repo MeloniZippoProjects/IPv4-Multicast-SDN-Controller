@@ -153,26 +153,29 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
             //todo: should check if the destinationAddress is a multicast address in IPv4 sense?
 
             //if set contains the dest address, it is a valid multicast group
-            Optional<MulticastGroup> target =
-                    multicastGroups.stream()
-                            .filter(group -> group.getIp().equals(destinationAddress))
-                            .findFirst();
-            if(target.isPresent())
+            if(multicastPool.contains(destinationAddress))
             {
-                setMulticastRule(target.get(), iofSwitch);
-                return Command.STOP;
-            }
-            else
-            {
-                sendICMPDestinationUnreachable(
-                        ipv4Packet,
-                        (byte) 7,
-                        eth.getSourceMACAddress(),
-                        ipv4Packet.getSourceAddress(),
-                        packetIn,
-                        iofSwitch
-                        );
-                return Command.STOP;
+                Optional<MulticastGroup> target =
+                        multicastGroups.stream()
+                                .filter(group -> group.getIp().equals(destinationAddress))
+                                .findFirst();
+                if(target.isPresent())
+                {
+                    setMulticastRule(target.get(), iofSwitch);
+                    return Command.STOP;
+                }
+                else
+                {
+                    sendICMPDestinationUnreachable(
+                            ipv4Packet,
+                            (byte) 7,
+                            eth.getSourceMACAddress(),
+                            ipv4Packet.getSourceAddress(),
+                            packetIn,
+                            iofSwitch
+                            );
+                    return Command.STOP;
+                }
             }
         }
 
