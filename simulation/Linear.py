@@ -30,14 +30,19 @@ def createNetwork():
     for host in net.hosts:
         host.cmd("route add default gw " + sys.argv[2])
         print(" - " + host.name + ": DONE")
-    print("Testing network connectivity")
-    net.pingAll()
+
+    if len(sys.argv) > 3 and sys.argv[3] == '-np':
+    	print("Skipping pingAll")
+    else:
+    	print("Testing network connectivity")
+    	net.pingAll()
+    
     CLI(net)
     net.stop()
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print("Usage: ./Linear.py {controller address} {default gateway address}")
+    if len(sys.argv) < 3:
+        print("Usage: ./Linear.py {controller address} {default gateway address} [-np to skip pingAll]")
         sys.exit()
     
     # Tell mininet to print useful information

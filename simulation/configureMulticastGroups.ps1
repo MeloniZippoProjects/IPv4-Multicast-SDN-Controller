@@ -22,14 +22,25 @@ $joinHost2 = @{
 
 function Call-Api($action, $method, $body)
 {
-    Write-Host $action $method
     $response = Invoke-WebRequest -Uri ($restAPI + $action) -Method $method -Body $body -ContentType "application/json"
     $response
 }
 
+function Join-Host($lastByte)
+{
+    $joinHost = @{
+        "host" = "10.0.0."+$lastByte;
+    } | ConvertTo-Json
+
+    $joinHost
+}
+
+
 Call-Api "multicastgroups/" 'Put' $createGroup
-Call-Api "multicastgroups/1/hosts" 'Put' $joinHost1
-Call-Api "multicastgroups/1/hosts" 'Put' $joinHost2
+Call-Api "multicastgroups/1/hosts" 'Put' (Join-Host 2)
+Call-Api "multicastgroups/1/hosts" 'Put' (Join-Host 4)
+Call-Api "multicastgroups/1/hosts" 'Put' (Join-Host 7)
+Call-Api "multicastgroups/1/hosts" 'Put' (Join-Host 8)
 Call-Api "multicastgroups/" 'Get'
 
 
