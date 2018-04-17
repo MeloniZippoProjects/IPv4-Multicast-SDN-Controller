@@ -33,8 +33,8 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     protected IRestApiService restApiService;
     private IOFSwitchService iofSwitchService;
 
-    private IPv4Address virtualGatewayIpAddress;
-    private MacAddress virtualGatewayMacAddress;
+    public IPv4Address virtualGatewayIpAddress;
+    public MacAddress virtualGatewayMacAddress;
 
     private IPv4AddressWithMask unicastPool;
     private IPv4AddressWithMask multicastPool;
@@ -46,11 +46,11 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
     private ARPLearningStorage arpLearningStorage;
 
     // Rule timeouts
-    private static final short IDLE_TIMEOUT = 10; // in seconds
-    private static final short HARD_TIMEOUT = 20; // every 20 seconds drop the entry
+    public static final short IDLE_TIMEOUT = 10; // in seconds
+    public static final short HARD_TIMEOUT = 20; // every 20 seconds drop the entry
 
-    private static final byte ARP_ETH_PRIORITY = 1;
-    private static final byte ICMP_ETH_PRIORITY = 1;
+    public static final byte ARP_ETH_PRIORITY = 1;
+    public static final byte ICMP_ETH_PRIORITY = 1;
 
 
     public Set<MulticastGroup> getMulticastGroups()
@@ -126,7 +126,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         if(eth.getEtherType() == EthType.ARP)
         {
             ARP arpPacket = (ARP) eth.getPayload();
-            processARPPacket(arpPacket, packetIn, iofSwitch);
+            return processARPPacket(arpPacket, packetIn, iofSwitch);
         }
 
         //consider only ipv4 packets
@@ -147,29 +147,35 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
                             ipv4Packet.getSourceAddress(),
                             packetIn,
                             iofSwitch);
+                return Command.STOP;
             }
 
             //todo: should check if the destinationAddress is a multicast address in IPv4 sense?
 
             //if set contains the dest address, it is a valid multicast group
-            Optional<MulticastGroup> target =
-                    multicastGroups.stream()
-                            .filter(group -> group.getIp().equals(destinationAddress))
-                            .findFirst();
-            if(target.isPresent())
+            if(multicastPool.contains(destinationAddress))
             {
-                setMulticastRule(target.get(), iofSwitch);
-            }
-            else
-            {
-                sendICMPDestinationUnreachable(
-                        ipv4Packet,
-                        (byte) 7,
-                        eth.getSourceMACAddress(),
-                        ipv4Packet.getSourceAddress(),
-                        packetIn,
-                        iofSwitch
-                        );
+                Optional<MulticastGroup> target =
+                        multicastGroups.stream()
+                                .filter(group -> group.getIp().equals(destinationAddress))
+                                .findFirst();
+                if(target.isPresent())
+                {
+                    setMulticastRule(target.get(), iofSwitch);
+                    return Command.STOP;
+                }
+                else
+                {
+                    sendICMPDestinationUnreachable(
+                            ipv4Packet,
+                            (byte) 7,
+                            eth.getSourceMACAddress(),
+                            ipv4Packet.getSourceAddress(),
+                            packetIn,
+                            iofSwitch
+                            );
+                    return Command.STOP;
+                }
             }
         }
 
@@ -226,16 +232,23 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         return pob.build();
     }
 
-    private void processARPPacket(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
+    public Command processARPPacket(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
     {
-        if(!arpPacket.getSenderProtocolAddress().equals(virtualGatewayIpAddress)) {
-            arpLearningStorage.learnFromARP(arpPacket, packetIn, iofSwitch);
-            arpLearningStorage.logStorageStatus();
+        if(!arpPacket.getSenderProtocolAddress().equals(virtualGatewayIpAddress)){
+            if(arpLearningStorage.learnFromARP(arpPacket, packetIn, iofSwitch)){
+                arpLearningStorage.logStorageStatus();
+            }
         }
 
-        //if it is the gateway ip address we must also build an arp response
-        if(arpPacket.getTargetProtocolAddress().equals(virtualGatewayIpAddress))
+        //if it is an arp request to the gateway ip address we must build an arp reply
+        if(arpPacket.getTargetProtocolAddress().equals(virtualGatewayIpAddress)
+                && arpPacket.getOpCode() == ARP.OP_REQUEST)
+        {
             interceptVirtualGatewayARPRequest(arpPacket, packetIn, iofSwitch);
+            return Command.STOP;
+        }
+
+        return Command.CONTINUE;
     }
 
     private void interceptVirtualGatewayARPRequest(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
@@ -346,6 +359,17 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         logger.info("Installed group " + multicastGroup.getId() + " in switch " + iofSwitch.getId().getLong());
     }
 
+    public void updateHostForwardInSwitches(IPv4Address hostAddress)
+    {
+        List<MulticastGroup> groupsJoined = multicastGroups.stream()
+                .filter(multicastGroup -> multicastGroup.getPartecipants().contains(hostAddress))
+                .collect(Collectors.toList());
+        for(MulticastGroup group : groupsJoined)
+        {
+           updateOFGroupInSwitches(group);
+        }
+    }
+
     private void updateOFGroupInSwitches(MulticastGroup multicastGroup)
     {
         for ( SwitchInfo switchInfo:
@@ -440,7 +464,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         multicastGroups = ConcurrentHashMap.newKeySet();
 
         //initialize arp storage
-        arpLearningStorage = new ARPLearningStorage();
+        arpLearningStorage = new ARPLearningStorage(this);
     }
 
     public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException

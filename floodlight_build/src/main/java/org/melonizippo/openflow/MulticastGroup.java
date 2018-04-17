@@ -121,7 +121,7 @@ public class MulticastGroup {
                     ).build();
             actionList.add(setMacField);
 
-            OFActionOutput outputPacket = actions.output(OFPort.of(hostDetails.port), IPv4MulticastModule.MTU);
+            OFActionOutput outputPacket = actions.output(hostDetails.port, IPv4MulticastModule.MTU);
             actionList.add(outputPacket);
 
             OFBucket forwardPacket = iofSwitch.getOFFactory().buildBucket()
