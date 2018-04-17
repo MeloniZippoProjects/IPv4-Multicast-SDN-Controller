@@ -357,6 +357,17 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         logger.info("Installed group " + multicastGroup.getId() + " in switch " + iofSwitch.getId().getLong());
     }
 
+    public void updateHostForwardInSwitches(IPv4Address hostAddress)
+    {
+        List<MulticastGroup> groupsJoined = multicastGroups.stream()
+                .filter(multicastGroup -> multicastGroup.getPartecipants().contains(hostAddress))
+                .collect(Collectors.toList());
+        for(MulticastGroup group : groupsJoined)
+        {
+           updateOFGroupInSwitches(group);
+        }
+    }
+
     private void updateOFGroupInSwitches(MulticastGroup multicastGroup)
     {
         for ( SwitchInfo switchInfo:

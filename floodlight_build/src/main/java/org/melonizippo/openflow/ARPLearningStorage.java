@@ -56,7 +56,9 @@ public class ARPLearningStorage {
             storage.put(switchId, switchStorage);
         }
 
-        switchStorage.learnFromARP(arpPacket, packetIn);
+        //If any learning happens, update the forwarding rules of groups joined by the host
+        if(switchStorage.learnFromARP(arpPacket, packetIn))
+            multicastModule.updateHostForwardInSwitches(arpPacket.getSenderProtocolAddress());
     }
 
     public void logStorageStatus()
@@ -129,7 +131,8 @@ public class ARPLearningStorage {
             iofSwitch.write(poBuilder.build());
         }
 
-        public void learnFromARP(ARP arpPacket, OFPacketIn packetIn)
+        //Returns true if any learning has occurred
+        public boolean learnFromARP(ARP arpPacket, OFPacketIn packetIn)
         {
             IPv4Address hostAddress = arpPacket.getSenderProtocolAddress();
             MacAddress hostMac = arpPacket.getSenderHardwareAddress();
@@ -139,11 +142,19 @@ public class ARPLearningStorage {
             if(entry == null)
             {
                 entry = new HostL2Details();
+                entry.mac = hostMac;
+                entry.port = port;
                 storage.put(hostAddress, entry);
+                return true;
+            }
+            else if(entry.mac != hostMac || entry.port != port)
+            {
+                entry.mac = hostMac;
+                entry.port = port;
+                return true;
             }
 
-            entry.mac = hostMac;
-            entry.port = port;
+            return false;
         }
 
         public void logStorageStatus()
