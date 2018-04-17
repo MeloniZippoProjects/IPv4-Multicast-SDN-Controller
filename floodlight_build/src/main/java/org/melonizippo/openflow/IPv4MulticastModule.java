@@ -456,7 +456,7 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
         //set defaultGateway virtual IPv4 address
         virtualGatewayIpAddress = IPv4Address.of("10.0.0.254");
-        virtualGatewayMacAddress = MacAddress.of("00:00:00:00:00:254");
+        virtualGatewayMacAddress = MacAddress.of("00:00:00:00:00:FE");
 
         //todo: maybe change it in a configuration file
         unicastPool = IPv4AddressWithMask.of("10.0.0.0/8");
