@@ -43,10 +43,17 @@ public class ARPLearningStorage {
         return  switchStorage.getHostL2Details(hostAddress);
     }
 
-    public void learnFromARP(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
+    /**
+     *
+     * @param arpPacket
+     * @param packetIn
+     * @param iofSwitch
+     * @return true if any learning occurred
+     */
+    public boolean learnFromARP(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
     {
         if(arpPacket.getSenderHardwareAddress() == multicastModule.virtualGatewayMacAddress)
-            return;
+            return false;
 
         long switchId = iofSwitch.getId().getLong();
         SwitchARPLearningStorage switchStorage = storage.get(switchId);
@@ -58,7 +65,12 @@ public class ARPLearningStorage {
 
         //If any learning happens, update the forwarding rules of groups joined by the host
         if(switchStorage.learnFromARP(arpPacket, packetIn))
+        {
             multicastModule.updateHostForwardInSwitches(arpPacket.getSenderProtocolAddress());
+            return true;
+        }
+        else
+            return false;
     }
 
     public void logStorageStatus()
@@ -74,7 +86,7 @@ public class ARPLearningStorage {
 
     private class SwitchARPLearningStorage
     {
-        private Map<IPv4Address, HostL2Details> storage = new HashMap<>();
+        private Map<IPv4Address, HostL2Details> storage = new ConcurrentHashMap<>();
         private IOFSwitch iofSwitch;
 
         public SwitchARPLearningStorage(IOFSwitch iofSwitch)
@@ -131,7 +143,12 @@ public class ARPLearningStorage {
             iofSwitch.write(poBuilder.build());
         }
 
-        //Returns true if any learning has occurred
+        /**
+         *
+         * @param arpPacket
+         * @param packetIn
+         * @return true if any learning has occurred
+         */
         public boolean learnFromARP(ARP arpPacket, OFPacketIn packetIn)
         {
             IPv4Address hostAddress = arpPacket.getSenderProtocolAddress();
@@ -147,7 +164,7 @@ public class ARPLearningStorage {
                 storage.put(hostAddress, entry);
                 return true;
             }
-            else if(entry.mac != hostMac || entry.port != port)
+            else if(!entry.mac.equals(hostMac) || !entry.port.equals(port))
             {
                 entry.mac = hostMac;
                 entry.port = port;

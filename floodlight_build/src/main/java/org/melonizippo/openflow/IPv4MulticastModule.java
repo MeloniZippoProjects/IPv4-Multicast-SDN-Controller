@@ -234,13 +234,15 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public Command processARPPacket(ARP arpPacket, OFPacketIn packetIn, IOFSwitch iofSwitch)
     {
-        if(!arpPacket.getSenderProtocolAddress().equals(virtualGatewayIpAddress)) {
-            arpLearningStorage.learnFromARP(arpPacket, packetIn, iofSwitch);
-            arpLearningStorage.logStorageStatus();
+        if(!arpPacket.getSenderProtocolAddress().equals(virtualGatewayIpAddress)){
+            if(arpLearningStorage.learnFromARP(arpPacket, packetIn, iofSwitch)){
+                arpLearningStorage.logStorageStatus();
+            }
         }
 
-        //if it is the gateway ip address we must also build an arp response
-        if(arpPacket.getTargetProtocolAddress().equals(virtualGatewayIpAddress))
+        //if it is an arp request to the gateway ip address we must build an arp reply
+        if(arpPacket.getTargetProtocolAddress().equals(virtualGatewayIpAddress)
+                && arpPacket.getOpCode() == ARP.OP_REQUEST)
         {
             interceptVirtualGatewayARPRequest(arpPacket, packetIn, iofSwitch);
             return Command.STOP;
