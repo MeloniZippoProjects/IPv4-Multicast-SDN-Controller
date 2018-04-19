@@ -18,7 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class MulticastGroupHostsResource extends ServerResource {
-    protected static Logger log = LoggerFactory.getLogger(MulticastGroupHostsResource.class);
+    protected static Logger Logger = LoggerFactory.getLogger(MulticastGroupHostsResource.class);
 
 
     /**
@@ -36,21 +36,31 @@ public class MulticastGroupHostsResource extends ServerResource {
         Map<String, String> response = new HashMap<String, String>();
         Gson g = new Gson();
 
-        //todo: get group id from url
         try
         {
             Map<String,String> request = (Map<String,String>)g.fromJson(fmJson, new HashMap<String,String>().getClass());
+
+            if(!request.containsKey("host"))
+                throw new RequiredParameterException();
+
             int groupId = Integer.parseInt((String)getRequestAttributes().get("groupId"));
             IPv4Address hostAddress = IPv4Address.of(request.get("host"));
             multicastModule.addToGroup(groupId, hostAddress);
 
             response.put("error", "none");
             response.put("message", "Host joined this group");
+
+            Logger.info("Added host " + hostAddress.toString() + " to group " + groupId);
         }
         catch(JsonSyntaxException ex)
         {
             response.put("error", "syntax");
             response.put("message", "Incorrect json syntax");
+        }
+        catch(RequiredParameterException ex)
+        {
+            response.put("error", "syntax_parameters");
+            response.put("message", "Missing required parameter(s)");
         }
         catch (IllegalArgumentException e)
         {
@@ -81,22 +91,31 @@ public class MulticastGroupHostsResource extends ServerResource {
         Map<String, String> response = new HashMap<String, String>();
         Gson g = new Gson();
 
-
-        //todo get group id from url
         try
         {
             Map<String,String> request = (Map<String,String>)g.fromJson(fmJson, new HashMap<String,String>().getClass());
+
+            if(!request.containsKey("host"))
+                throw new RequiredParameterException();
+
             int groupId = Integer.parseInt((String)getRequestAttributes().get("groupId"));
             IPv4Address hostAddress = IPv4Address.of(request.get("host"));
             multicastModule.removeFromGroup(groupId, hostAddress);
 
             response.put("error", "none");
             response.put("message", "Host unjoined this group");
+
+            Logger.info("Removed host " + hostAddress.toString() + " from group " + groupId);
         }
         catch(JsonSyntaxException ex)
         {
             response.put("error", "syntax");
             response.put("message", "Incorrect json syntax");
+        }
+        catch(RequiredParameterException ex)
+        {
+            response.put("error", "syntax_parameters");
+            response.put("message", "Missing required parameter(s)");
         }
         catch (IllegalArgumentException e)
         {
