@@ -150,8 +150,6 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
                 return Command.STOP;
             }
 
-            //todo: should check if the destinationAddress is a multicast address in IPv4 sense?
-
             //if set contains the dest address, it is a valid multicast group
             if(multicastPool.contains(destinationAddress))
             {
@@ -310,8 +308,6 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
     public void setMulticastRule(MulticastGroup multicastGroup, IOFSwitch iofSwitch)
     {
-        //todo: check if toString is correct output
-
         SwitchInfo switchInfo = connectedSwitches.get(iofSwitch.getId().getLong());
         if(!switchInfo.knownGroups.contains(multicastGroup.getId())) {
             addOFGroupToSwitch(multicastGroup, iofSwitch);
@@ -334,7 +330,10 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
 
         ArrayList<OFAction> actionList = new ArrayList<OFAction>();
         int groupId = multicastGroup.getId();
-        actionList.add(actions.buildGroup().setGroup(OFGroup.of(groupId)).build());
+        actionList.add(
+                actions.buildGroup()
+                        .setGroup(OFGroup.of(groupId))
+                        .build());
 
         flowModBuilder.setActions(actionList);
 
