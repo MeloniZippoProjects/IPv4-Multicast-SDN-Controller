@@ -22,13 +22,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
-<<<<<<< HEAD
-import java.util.concurrent.ConcurrentSkipListSet;
-import java.util.concurrent.ConcurrentHashMap;
-=======
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
->>>>>>> 00c057b00081ee325c9f9380de5b45dc9caff0ab
 
 public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModule, IIPv4MulticastService, IOFSwitchListener {
     private final static Logger logger = LoggerFactory.getLogger(IPv4MulticastModule.class);
