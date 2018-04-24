@@ -459,19 +459,12 @@ public class IPv4MulticastModule implements IOFMessageListener, IFloodlightModul
         virtualGatewayMacAddress = MacAddress.of("00:00:00:00:00:FE");
 
         //todo: maybe change it in a configuration file
-<<<<<<< HEAD
-        unicastPool = IPv4AddressWithMask.of("192.168.0.0/24");
-        multicastPool = IPv4AddressWithMask.of("224.0.100.0/24");
-        multicastGroups = new ConcurrentSkipListSet<>();
-        OFGroupsIds = new ConcurrentHashMap<>();
-=======
         unicastPool = IPv4AddressWithMask.of("10.0.0.0/8");
         multicastPool = IPv4AddressWithMask.of("11.0.1.0/8");
         multicastGroups = ConcurrentHashMap.newKeySet();
 
         //initialize arp storage
         arpLearningStorage = new ARPLearningStorage(this);
->>>>>>> 00c057b00081ee325c9f9380de5b45dc9caff0ab
     }
 
     public void startUp(FloodlightModuleContext floodlightModuleContext) throws FloodlightModuleException
