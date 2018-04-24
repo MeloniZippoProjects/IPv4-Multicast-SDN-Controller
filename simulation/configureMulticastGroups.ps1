@@ -10,6 +10,7 @@ Write-Host "Rest endpoint: $restAPI"
 $createGroup = @{
     "ip" = "11.0.0.1";
     "name" = "group1";
+    "description" = "Test group #1";
 } | ConvertTo-Json
 
 $joinHost1 = @{
